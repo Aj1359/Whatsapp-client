@@ -253,7 +253,7 @@ export default function SettingsPage() {
         onSuccess={(saved) => {
           updateWhatsAppStatusLocally({
             isConnected: true,
-            displayPhone: saved.display_phone || '+91 98765 43210',
+            displayPhone: saved.display_phone || saved.phone_number_id || 'Connected Number',
             verifiedName: saved.verified_name || 'Verified Business Profile',
             qualityRating: saved.quality_rating || 'GREEN',
           });
