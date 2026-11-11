@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: wa-backend
+    runtime: node
+    rootDir: backend
+    plan: free # change to starter for a paying client
+    buildCommand: npm ci && npm run build
+    startCommand: node dist/index.js
+    healthCheckPath: /healthz
+    envVars:
+      - { key: NODE_VERSION, value: "20" }
+      - { key: NODE_ENV, value: production }
+      - { key: DATABASE_URL, sync: false }
+      - { key: SUPABASE_URL, sync: false }
+      - { key: SUPABASE_SERVICE_ROLE_KEY, sync: false }
+      - { key: SUPABASE_JWKS_URL, sync: false }
+      - { key: ENCRYPTION_KEY, sync: false }
+      - { key: META_APP_ID, sync: false }
+      - { key: META_APP_SECRET, sync: false }
+      - { key: WEBHOOK_VERIFY_TOKEN, sync: false }
+      - { key: CRON_SECRET, sync: false }
+      - { key: FRONTEND_ORIGIN, sync: false }
+  - type: web
+    name: wa-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    routes:
+      - { type: rewrite, source: /*, destination: /index.html }
+    envVars:
+      - { key: VITE_API_URL, sync: false }
+      - { key: VITE_SUPABASE_URL, sync: false }
+      - { key: VITE_SUPABASE_ANON_KEY, sync: false }
+
