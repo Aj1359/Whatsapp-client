@@ -14,18 +14,20 @@ import settingsRouter from './routes/settings.js';
 
 export const app = express();
 
-// PRD Security specs: helmet, CORS allows FRONTEND_ORIGIN and any Render frontend
-app.use(helmet());
+// PRD Security specs: helmet configured for cross-origin APIs, CORS allows frontend
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginOpenerPolicy: { policy: 'unsafe-none' },
+  })
+);
+
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin or any Render domain / localhost
-      if (!origin || origin.includes('onrender.com') || origin.includes('localhost') || origin.includes('127.0.0.1')) {
-        return callback(null, true);
-      }
-      return callback(null, true);
-    },
+    origin: true,
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Org-Id', 'X-Requested-With', 'Accept'],
   })
 );
 

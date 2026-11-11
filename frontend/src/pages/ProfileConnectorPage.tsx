@@ -52,9 +52,10 @@ export default function ProfileConnectorPage() {
         quality_rating: res.quality_rating || 'GREEN',
       });
     } catch (err: any) {
+      console.error('Meta connection test error:', err);
       setTestResult({
         success: false,
-        error: err.message || 'Connection test failed',
+        error: err.message || 'Connection test failed. Please verify credentials.',
       });
     } finally {
       setTesting(false);
