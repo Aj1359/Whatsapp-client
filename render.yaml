@@ -8,7 +8,7 @@ services:
     startCommand: node dist/index.js
     healthCheckPath: /healthz
     envVars:
-      - { key: NODE_VERSION, value: "20" }
+      - { key: NODE_VERSION, value: "22" }
       - { key: NODE_ENV, value: production }
       - { key: DATABASE_URL, sync: false }
       - { key: SUPABASE_URL, sync: false }
