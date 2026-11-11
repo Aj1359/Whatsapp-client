@@ -19,183 +19,21 @@ function getHeaders(): HeadersInit {
   };
 }
 
-// In-memory demo data store for seamless preview if backend is sleeping or in setup mode
+// In-memory initial data store (starts clean and empty for real production testing)
 export const mockData: any = {
   dashboard: {
-    activeContacts: 3420,
-    messagesSentToday: 65,
+    activeContacts: 0,
+    messagesSentToday: 0,
     dailyCap: 250,
-    lastCampaignResult: {
-      name: 'Diwali Festive Mega Sale 2026',
-      total: 1250,
-      sent: 1250,
-      delivered: 1220,
-      seen: 984, // Who has seen it!
-      notSeen: 236, // Who hasn't seen it!
-      failed: 30,
-      seenPct: 78.7,
-      date: '2026-11-09T14:30:00Z',
-    },
-    nextScheduledSend: {
-      name: 'VIP Cart Recovery Blast',
-      time: 'Tomorrow, 10:30 AM',
-      recipientsCount: 412,
-    },
-    banners: [
-      { id: 'b1', type: 'info', text: 'Daily send cap reset occurs at midnight (Asia/Kolkata).' },
-    ],
+    lastCampaignResult: null,
+    nextScheduledSend: null,
+    banners: [],
   },
-  contacts: [
-    {
-      id: 1,
-      name: 'Rajesh Kumar',
-      whatsapp_e164: '+919876543210',
-      phone_raw: '09876543210',
-      email: 'rajesh.k@gmail.com',
-      status: 'active',
-      opt_in_confirmed_at: '2026-10-12T10:00:00Z',
-      tags: ['VIP', 'Repeat Buyer'],
-      extra: { city: 'Mumbai', orders: 12, last_order_val: '₹4,500' },
-      last_message_status: 'read',
-      seen_at: '2026-11-09T14:45:12Z',
-    },
-    {
-      id: 2,
-      name: 'Ananya Sharma',
-      whatsapp_e164: '+919820011223',
-      phone_raw: '+91 98200 11223',
-      email: 'ananya.sharma@yahoo.com',
-      status: 'active',
-      opt_in_confirmed_at: '2026-10-15T11:20:00Z',
-      tags: ['Lead', 'Website Form'],
-      extra: { city: 'Bangalore', interest: 'Electronics' },
-      last_message_status: 'delivered',
-      seen_at: null, // NOT SEEN
-    },
-    {
-      id: 3,
-      name: 'Vikram Malhotra',
-      whatsapp_e164: '+919930055443',
-      phone_raw: '9930055443',
-      email: 'vikram.m@outlook.com',
-      status: 'active',
-      opt_in_confirmed_at: '2026-10-18T09:15:00Z',
-      tags: ['Wholesale', 'Delhi'],
-      extra: { city: 'Delhi', credit_tier: 'A' },
-      last_message_status: 'read',
-      seen_at: '2026-11-09T15:02:40Z',
-    },
-    {
-      id: 4,
-      name: 'Pooja Hegde',
-      whatsapp_e164: '+919769001122',
-      phone_raw: '+91 97690 01122',
-      email: 'pooja.h@gmail.com',
-      status: 'opted_out',
-      opted_out_at: '2026-11-01T16:30:00Z',
-      tags: ['Inactive'],
-      extra: { reason: 'User replied STOP' },
-      last_message_status: 'failed',
-      seen_at: null,
-    },
-    {
-      id: 5,
-      name: 'Suresh Patel',
-      whatsapp_e164: '+919845012345',
-      phone_raw: '09845012345',
-      email: 'suresh@pateltrading.in',
-      status: 'active',
-      opt_in_confirmed_at: '2026-10-25T14:00:00Z',
-      tags: ['B2B', 'Ahmedabad'],
-      extra: { gstin: '24AAAAA0000A1Z5' },
-      last_message_status: 'delivered',
-      seen_at: null, // NOT SEEN
-    },
-  ],
-  campaigns: [
-    {
-      id: 101,
-      name: 'Diwali Festive Mega Sale 2026',
-      kind: 'broadcast',
-      template_name: 'festive_offer_v1',
-      list_name: 'All Active VIP Customers',
-      status: 'completed',
-      total: 1250,
-      sent_count: 1250,
-      delivered_count: 1220,
-      read_count: 984, // SEEN
-      unread_count: 236, // NOT SEEN
-      failed_count: 30,
-      started_at: '2026-11-09T14:30:00Z',
-      completed_at: '2026-11-09T14:48:15Z',
-      image_path: 'campaigns/festive_banner.jpg',
-    },
-    {
-      id: 102,
-      name: 'New Product Arrival - Winter Jackets',
-      kind: 'broadcast',
-      template_name: 'new_arrivals_nov',
-      list_name: 'Fashion Segment Customers',
-      status: 'running',
-      total: 800,
-      sent_count: 520,
-      delivered_count: 480,
-      read_count: 310, // SEEN
-      unread_count: 170, // NOT SEEN
-      failed_count: 12,
-      started_at: '2026-11-10T11:00:00Z',
-      completed_at: null,
-    },
-  ],
-  templates: [
-    {
-      id: 1,
-      name: 'festive_offer_v1',
-      language: 'en',
-      category: 'marketing',
-      header_type: 'image',
-      status: 'approved',
-      body: 'Hi {{1}}, celebrate Diwali with exclusive 30% OFF on all items! Use code: {{2}}.\n\nReply STOP to unsubscribe.',
-      variable_names: ['name', 'discount_code'],
-      footer: 'Reply STOP to opt out',
-    },
-    {
-      id: 2,
-      name: 'order_status_update',
-      language: 'en',
-      category: 'utility',
-      header_type: 'none',
-      status: 'approved',
-      body: 'Hi {{1}}, your order #{{2}} has been dispatched! Track your shipment: {{3}}',
-      variable_names: ['name', 'order_id', 'tracking_url'],
-      footer: 'Clientbase Logistics',
-    },
-  ],
-  lists: [
-    { id: 1, name: 'All Active VIP Customers', member_count: 1250, created_at: '2026-10-01' },
-    { id: 2, name: 'Fashion Segment Customers', member_count: 800, created_at: '2026-10-15' },
-    { id: 3, name: 'Cart Abandoners (Last 7 Days)', member_count: 412, created_at: '2026-11-01' },
-  ],
-  replies: [
-    {
-      id: 1,
-      from_name: 'Rajesh Kumar',
-      from_e164: '+919876543210',
-      body: 'Thanks! Placed the order using the code.',
-      received_at: '2026-11-09T15:10:00Z',
-      is_stop: false,
-      handled: false,
-    },
-    {
-      id: 2,
-      from_name: 'Pooja Hegde',
-      from_e164: '+919769001122',
-      body: 'STOP',
-      received_at: '2026-11-01T16:30:00Z',
-      is_stop: true,
-      handled: true,
-    },
-  ],
+  contacts: [],
+  campaigns: [],
+  templates: [],
+  lists: [],
+  replies: [],
 };
 
 async function safeFetch<T>(path: string, options: RequestInit = {}, fallback: T): Promise<T> {
@@ -307,82 +145,24 @@ export const api = {
     list: () => safeFetch('/api/campaigns', { method: 'GET' }, mockData.campaigns),
 
     getDetails: (id: number) => {
-      const camp = mockData.campaigns.find(c => c.id === id) || mockData.campaigns[0];
-      // Generate per-contact seen / not-seen list for this campaign
-      const recipientMessages = [
-        {
-          id: 1,
-          contact_name: 'Rajesh Kumar',
-          whatsapp_e164: '+919876543210',
-          status: 'read', // SEEN
-          sent_at: '2026-11-09T14:30:15Z',
-          delivered_at: '2026-11-09T14:30:20Z',
-          seen_at: '2026-11-09T14:45:12Z', // EXACT SEEN TIMESTAMP
-          has_seen: true,
-        },
-        {
-          id: 2,
-          contact_name: 'Vikram Malhotra',
-          whatsapp_e164: '+919930055443',
-          status: 'read', // SEEN
-          sent_at: '2026-11-09T14:30:16Z',
-          delivered_at: '2026-11-09T14:30:22Z',
-          seen_at: '2026-11-09T15:02:40Z', // EXACT SEEN TIMESTAMP
-          has_seen: true,
-        },
-        {
-          id: 3,
-          contact_name: 'Ananya Sharma',
-          whatsapp_e164: '+919820011223',
-          status: 'delivered', // NOT SEEN YET
-          sent_at: '2026-11-09T14:30:18Z',
-          delivered_at: '2026-11-09T14:30:25Z',
-          seen_at: null,
-          has_seen: false,
-        },
-        {
-          id: 4,
-          contact_name: 'Suresh Patel',
-          whatsapp_e164: '+919845012345',
-          status: 'delivered', // NOT SEEN YET
-          sent_at: '2026-11-09T14:30:20Z',
-          delivered_at: '2026-11-09T14:30:28Z',
-          seen_at: null,
-          has_seen: false,
-        },
-        {
-          id: 5,
-          contact_name: 'Deepak Verma',
-          whatsapp_e164: '+919811223344',
-          status: 'sent', // IN-FLIGHT / NOT SEEN
-          sent_at: '2026-11-09T14:30:22Z',
-          delivered_at: null,
-          seen_at: null,
-          has_seen: false,
-        },
-        {
-          id: 6,
-          contact_name: 'Amitabh Joshi',
-          whatsapp_e164: '+919899887766',
-          status: 'failed', // FAILED / NOT SEEN
-          sent_at: '2026-11-09T14:30:24Z',
-          delivered_at: null,
-          seen_at: null,
-          has_seen: false,
-          error_message: 'Phone number not registered on WhatsApp (131026)',
-        },
-      ];
-
+      const camp = mockData.campaigns.find((c: any) => c.id === id);
+      if (!camp) {
+        return Promise.resolve({
+          campaign: null,
+          recipients: [],
+          counts: { total: 0, sent: 0, delivered: 0, seen: 0, notSeen: 0, failed: 0 },
+        });
+      }
       return Promise.resolve({
         campaign: camp,
-        recipients: recipientMessages,
+        recipients: [],
         counts: {
-          total: camp.total,
-          sent: camp.sent_count,
-          delivered: camp.delivered_count,
-          seen: camp.read_count,
-          notSeen: camp.total - camp.read_count,
-          failed: camp.failed_count,
+          total: camp.total || 0,
+          sent: camp.sent_count || 0,
+          delivered: camp.delivered_count || 0,
+          seen: camp.read_count || 0,
+          notSeen: (camp.total || 0) - (camp.read_count || 0),
+          failed: camp.failed_count || 0,
         },
       });
     },

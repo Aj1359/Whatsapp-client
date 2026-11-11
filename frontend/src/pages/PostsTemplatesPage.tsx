@@ -30,40 +30,7 @@ export default function PostsTemplatesPage() {
   const navigate = useNavigate();
 
   // Day-wise history of posts/messages
-  const [posts, setPosts] = useState<DayPost[]>([
-    {
-      id: 101,
-      day: 'Monday',
-      date: '09 Nov 2026',
-      title: 'Diwali Festive Mega Sale 2026',
-      messageText: 'Hi {{name}}, celebrate Diwali with exclusive 30% OFF on all items! Use code: DIWALI30.\n\nReply STOP to unsubscribe.',
-      imageUrl: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=600&q=80',
-      sentCount: 1250,
-      seenCount: 984,
-      status: 'sent',
-    },
-    {
-      id: 102,
-      day: 'Friday',
-      date: '07 Nov 2026',
-      title: 'Weekend Flash 20% Discount Push',
-      messageText: 'Hello {{name}}! Flash weekend sale starts tonight at 8 PM. Check out the latest collection now.',
-      imageUrl: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=600&q=80',
-      sentCount: 800,
-      seenCount: 620,
-      status: 'sent',
-    },
-    {
-      id: 103,
-      day: 'Tuesday',
-      date: '04 Nov 2026',
-      title: 'Gold Coin Reward Reminder',
-      messageText: 'Dear {{name}}, your loyalty reward of 500 bonus points expires this Thursday. Redeem on your next visit!',
-      sentCount: 650,
-      seenCount: 512,
-      status: 'sent',
-    },
-  ]);
+  const [posts, setPosts] = useState<DayPost[]>([]);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [repeatPostData, setRepeatPostData] = useState<DayPost | null>(null);
@@ -104,7 +71,31 @@ export default function PostsTemplatesPage() {
           Broadcast History (Day by Day)
         </h2>
 
-        {posts.map((post) => (
+        {posts.length === 0 ? (
+          <div className="card p-12 text-center border-dashed border-2 border-gray-200 bg-white space-y-4">
+            <div className="w-16 h-16 rounded-full bg-emerald-50 text-whatsapp-teal flex items-center justify-center mx-auto">
+              <Calendar size={28} />
+            </div>
+            <div className="max-w-md mx-auto space-y-1">
+              <h2 className="text-base font-bold text-gray-900">No Posts or Templates Created Yet</h2>
+              <p className="text-xs text-gray-500">
+                Create your first day-wise post with custom message and image, or reuse saved broadcast templates.
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                onClick={() => {
+                  setRepeatPostData(null);
+                  setShowCreateModal(true);
+                }}
+                className="btn-primary py-2.5 px-5 text-xs font-bold inline-flex items-center gap-2 shadow"
+              >
+                <Plus size={14} /> Create First Post
+              </button>
+            </div>
+          </div>
+        ) : (
+          posts.map((post) => (
           <div
             key={post.id}
             className="card p-5 hover:border-whatsapp-teal/40 transition shadow-sm space-y-4 bg-white"
@@ -175,7 +166,7 @@ export default function PostsTemplatesPage() {
               </div>
             </div>
           </div>
-        ))}
+        )))}
       </div>
 
       {/* Create / Repeat Post Modal */}

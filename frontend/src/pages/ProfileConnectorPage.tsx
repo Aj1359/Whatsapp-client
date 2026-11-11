@@ -17,9 +17,9 @@ import {
 export default function ProfileConnectorPage() {
   const { currentOrg, user, whatsAppStatus, updateWhatsAppStatusLocally } = useAuth();
 
-  const [phoneId, setPhoneId] = useState(whatsAppStatus.phoneNumberId || '1029384756102');
-  const [wabaId, setWabaId] = useState(whatsAppStatus.wabaId || '1098471928374');
-  const [token, setToken] = useState('EAAG...sample_token');
+  const [phoneId, setPhoneId] = useState(whatsAppStatus.phoneNumberId || '');
+  const [wabaId, setWabaId] = useState(whatsAppStatus.wabaId || '');
+  const [token, setToken] = useState('');
   const [appSecret, setAppSecret] = useState('');
 
   const [testing, setTesting] = useState(false);
@@ -27,7 +27,9 @@ export default function ProfileConnectorPage() {
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const webhookUrl = `${window.location.origin.replace('5173', '4000')}/webhooks/whatsapp`;
+  const webhookUrl = import.meta.env.VITE_API_URL
+    ? `${import.meta.env.VITE_API_URL}/webhooks/whatsapp`
+    : `${window.location.origin.replace('5173', '4000')}/webhooks/whatsapp`;
 
   const copyWebhookUrl = () => {
     navigator.clipboard.writeText(webhookUrl);

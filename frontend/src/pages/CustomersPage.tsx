@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 
 export default function CustomersPage() {
-  const [contacts, setContacts] = useState<any[]>(mockData.contacts);
+  const [contacts, setContacts] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -140,8 +140,15 @@ export default function CustomersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {contacts.map((c) => (
-                <tr key={c.id || c.whatsapp_e164} className="hover:bg-gray-50/80 transition">
+              {contacts.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-gray-400 text-xs">
+                    No customer records found. Click "+ Add Customer" or "Import CSV/Excel" to add your WhatsApp contacts.
+                  </td>
+                </tr>
+              ) : (
+                contacts.map((c) => (
+                  <tr key={c.id || c.whatsapp_e164} className="hover:bg-gray-50/80 transition">
                   <td className="py-3.5 px-4 font-bold text-gray-900">{c.name}</td>
                   <td className="py-3.5 px-4 font-mono font-bold text-emerald-800">
                     {c.whatsapp_e164}
@@ -192,7 +199,7 @@ export default function CustomersPage() {
                     </a>
                   </td>
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
         </div>

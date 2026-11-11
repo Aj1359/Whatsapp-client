@@ -13,44 +13,7 @@ import {
 } from 'lucide-react';
 
 export default function RepliesChatPage() {
-  const [replies, setReplies] = useState([
-    {
-      id: 1,
-      from_name: 'Rajesh Kumar',
-      from_e164: '+919876543210',
-      body: 'Thanks! Placed the order using the code.',
-      received_at: '15:10 PM (09 Nov)',
-      is_stop: false,
-      handled: false,
-    },
-    {
-      id: 2,
-      from_name: 'Ananya Sharma',
-      from_e164: '+919820011223',
-      body: 'Can I get this delivered in Bangalore by tomorrow evening?',
-      received_at: '15:25 PM (09 Nov)',
-      is_stop: false,
-      handled: false,
-    },
-    {
-      id: 3,
-      from_name: 'Vikram Malhotra',
-      from_e164: '+919930055443',
-      body: 'Do you have wholesale tier pricing for 50+ units?',
-      received_at: '16:02 PM (09 Nov)',
-      is_stop: false,
-      handled: false,
-    },
-    {
-      id: 4,
-      from_name: 'Pooja Hegde',
-      from_e164: '+919769001122',
-      body: 'STOP',
-      received_at: '16:30 PM (01 Nov)',
-      is_stop: true,
-      handled: true,
-    },
-  ]);
+  const [replies, setReplies] = useState<any[]>([]);
 
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [replyText, setReplyText] = useState('');
@@ -197,7 +160,12 @@ export default function RepliesChatPage() {
         </div>
 
         <div className="divide-y divide-gray-100">
-          {replies.map((rep) => {
+          {replies.length === 0 ? (
+            <div className="p-12 text-center text-gray-400 text-xs">
+              No inbound customer replies yet. Responses sent by your contacts will show up here.
+            </div>
+          ) : (
+            replies.map((rep) => {
             const isSelected = selectedIds.includes(rep.id);
             return (
               <div
@@ -271,7 +239,7 @@ export default function RepliesChatPage() {
                 </div>
               </div>
             );
-          })}
+          }))}
         </div>
       </div>
     </div>
