@@ -8,11 +8,11 @@ const envSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   SUPABASE_JWKS_URL: z.string().url().optional(),
   ENCRYPTION_KEY: z.string().min(1),
-  META_APP_ID: z.string().min(1),
-  META_APP_SECRET: z.string().min(1),
-  WEBHOOK_VERIFY_TOKEN: z.string().min(1),
-  CRON_SECRET: z.string().min(1),
-  FRONTEND_ORIGIN: z.string().url().default('http://localhost:5173'),
+  META_APP_ID: z.string().default('saas_platform_meta_app_id'),
+  META_APP_SECRET: z.string().default('saas_platform_meta_app_secret'),
+  WEBHOOK_VERIFY_TOKEN: z.string().default('wa_verify_token_123456'),
+  CRON_SECRET: z.string().default('wa_cron_secret_789012'),
+  FRONTEND_ORIGIN: z.string().default('https://wa-frontend.onrender.com'),
   DATABASE_URL: z.string().min(1).optional(),
 });
 
