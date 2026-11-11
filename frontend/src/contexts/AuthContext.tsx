@@ -77,6 +77,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
+    // Clean up any stale demo keys from previous sessions
+    localStorage.removeItem('active-wa-status');
+    localStorage.removeItem('demo-user');
+    localStorage.removeItem('active-org');
+
     // 1. Get initial session from Supabase
     supabase.auth
       .getSession()

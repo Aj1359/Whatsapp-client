@@ -217,45 +217,43 @@ export const api = {
       rate_utility: 0.115,
       gst_percent: 18,
     }),
-    getWhatsApp: () =>
-      safeFetch('/api/settings/whatsapp', { method: 'GET' }, {
-        is_connected: true,
-        phone_number_id: '1029384756102',
-        waba_id: '1098471928374',
-        display_phone: '+91 98765 43210',
-        verified_name: 'Acme Retail India',
-        quality_rating: 'GREEN',
-      }),
-    saveWhatsApp: (data: { phone_number_id: string; waba_id: string; token: string; app_secret?: string }) =>
-      safeFetch(
-        '/api/settings/whatsapp',
-        {
-          method: 'PUT',
-          body: JSON.stringify(data),
-        },
-        {
-          is_connected: true,
-          phone_number_id: data.phone_number_id,
-          waba_id: data.waba_id,
-          display_phone: '+91 98765 43210',
-          verified_name: 'Verified Business Account',
-          quality_rating: 'GREEN',
-        }
-      ),
-    testWhatsApp: (data: { phone_number_id: string; token: string }) =>
-      safeFetch(
-        '/api/settings/whatsapp/test',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        {
-          success: true,
-          display_phone_number: '+91 98765 43210',
-          verified_name: 'Verified Business Profile',
-          quality_rating: 'GREEN',
-        }
-      ),
+    getWhatsApp: async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/settings/whatsapp`, {
+          method: 'GET',
+          headers: getHeaders(),
+        });
+        if (!res.ok) return { is_connected: false };
+        const json = await res.json();
+        return json.data ?? json;
+      } catch {
+        return { is_connected: false };
+      }
+    },
+    saveWhatsApp: async (data: { phone_number_id: string; waba_id: string; token: string; app_secret?: string }) => {
+      const res = await fetch(`${API_BASE}/api/settings/whatsapp`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error?.message || 'Failed to save WhatsApp settings');
+      }
+      return json.data ?? json;
+    },
+    testWhatsApp: async (data: { phone_number_id: string; token: string }) => {
+      const res = await fetch(`${API_BASE}/api/settings/whatsapp/test`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error?.message || 'Meta test connection failed');
+      }
+      return json.data ?? json;
+    },
   },
 };
 

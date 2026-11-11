@@ -47,8 +47,8 @@ export default function ProfileConnectorPage() {
       });
       setTestResult({
         success: true,
-        display_phone: res.display_phone_number || '+91 98765 43210',
-        verified_name: res.verified_name || currentOrg?.name,
+        display_phone: res.display_phone_number || res.display_phone || phoneId,
+        verified_name: res.verified_name || currentOrg?.name || 'Verified WhatsApp Profile',
         quality_rating: res.quality_rating || 'GREEN',
       });
     } catch (err: any) {
@@ -74,9 +74,9 @@ export default function ProfileConnectorPage() {
         isConnected: true,
         phoneNumberId: phoneId,
         wabaId,
-        displayPhone: testResult?.display_phone || '+91 98765 43210',
+        displayPhone: testResult?.display_phone || phoneId,
         verifiedName: testResult?.verified_name || currentOrg?.name,
-        qualityRating: 'GREEN',
+        qualityRating: testResult?.quality_rating || 'GREEN',
       });
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 3500);
