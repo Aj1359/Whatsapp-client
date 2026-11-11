@@ -8,8 +8,14 @@ const router = Router();
 const CRON_SECRET = process.env.CRON_SECRET;
 const ADVISORY_LOCK_ID = 918273645;
 
-router.post('/tick', async (req: Request, res: Response) => {
-  const secret = req.headers['x-cron-secret'];
+router.all('/tick', async (req: Request, res: Response) => {
+  const secret = req.headers['x-cron-secret'] || req.query.secret;
+  
+  // If it's a simple keep-alive GET ping from a cron service without secret, return 200 to keep server awake
+  if (req.method === 'GET' && (!secret || secret !== CRON_SECRET)) {
+    return res.status(200).json({ data: { status: 'alive', message: 'Render keep-alive ping successful' } });
+  }
+
   if (!secret || secret !== CRON_SECRET) {
     return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid cron secret' } });
   }
