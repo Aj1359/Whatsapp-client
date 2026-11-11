@@ -262,3 +262,45 @@ for t in select tablename from pg_tables where schemaname = 'public' loop
   execute format('alter table public.%I enable row level security', t);
 end loop; end $$;
 
+-- ============================================================
+-- Auto-provision Organization & Profile on User Signup
+-- ============================================================
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  -- 1. Insert Profile
+  insert into public.profiles (id, full_name)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'business_name', new.email)
+  )
+  on conflict (id) do nothing;
+
+  -- 2. Insert Default Organization (using user id as org id for default personal org)
+  insert into public.organizations (id, name)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'business_name', 'My Business')
+  )
+  on conflict (id) do nothing;
+
+  -- 3. Link Membership as Owner
+  insert into public.memberships (org_id, user_id, role)
+  values (new.id, new.id, 'owner')
+  on conflict (org_id, user_id) do nothing;
+
+  -- 4. Create Default Settings
+  insert into public.settings (org_id)
+  values (new.id)
+  on conflict (org_id) do nothing;
+
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+
