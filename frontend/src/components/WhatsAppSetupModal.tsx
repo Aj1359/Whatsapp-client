@@ -57,7 +57,7 @@ export function WhatsAppSetupModal({ isOpen, onClose, onSuccess }: Props) {
 
       setTestResult({
         success: true,
-        display_phone: res.display_phone_number || '+91 98765 43210',
+        display_phone: res.display_phone_number || res.display_phone || 'Active WhatsApp Business',
         verified_name: res.verified_name || 'Verified Business Profile',
         quality_rating: res.quality_rating || 'GREEN',
       });
