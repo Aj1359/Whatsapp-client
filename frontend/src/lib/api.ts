@@ -7,10 +7,11 @@
  * - Full fallback mock state so the entire UI can be explored immediately
  */
 
-// Backend URL — hardcoded so the value is always baked into the bundle at build time.
-// To use a local backend: set VITE_API_URL=http://localhost:4000 in frontend/.env.local
-const API_BASE: string = (import.meta.env.VITE_API_URL as string | undefined)
-  || 'https://wa-backend-ayta.onrender.com';
+// Exact live backend URL on Render (wa-backend-ayta.onrender.com)
+export const LIVE_BACKEND_URL = 'https://wa-backend-ayta.onrender.com';
+
+// Force live backend URL directly to eliminate any stale/misconfigured Render environment variable
+const API_BASE: string = LIVE_BACKEND_URL;
 
 function getHeaders(): HeadersInit {
   const token = localStorage.getItem('sb-token') ?? 'demo-token';
