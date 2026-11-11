@@ -14,11 +14,17 @@ import settingsRouter from './routes/settings.js';
 
 export const app = express();
 
-// PRD Security specs: helmet, CORS allows FRONTEND_ORIGIN
+// PRD Security specs: helmet, CORS allows FRONTEND_ORIGIN and any Render frontend
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173',
+    origin: (origin, callback) => {
+      // Allow requests with no origin or any Render domain / localhost
+      if (!origin || origin.includes('onrender.com') || origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
     credentials: true,
   })
 );

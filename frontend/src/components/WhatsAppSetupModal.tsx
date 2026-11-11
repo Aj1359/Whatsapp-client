@@ -247,7 +247,7 @@ export function WhatsAppSetupModal({ isOpen, onClose, onSuccess }: Props) {
           <div className="bg-amber-50/70 border border-amber-200 rounded-lg p-3 text-[11px] text-amber-900 space-y-1">
             <p className="font-semibold">Webhook Callback URL to paste in Meta App:</p>
             <p className="font-mono bg-amber-100/60 p-1.5 rounded select-all break-all text-[10px]">
-              {window.location.origin.replace('5173', '4000')}/webhooks/whatsapp
+              https://wa-backend-ayta.onrender.com/webhooks/whatsapp
             </p>
             <p className="text-amber-800">
               Verify Token: <code className="font-mono font-bold">wa_verify_token_123456</code> (Subscribed: messages)
