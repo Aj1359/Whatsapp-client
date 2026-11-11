@@ -43,9 +43,9 @@ export function Sidebar() {
           <MessageSquare size={22} />
         </div>
         <div>
-          <h2 className="font-extrabold text-sm tracking-wide">Clientbase WA</h2>
-          <p className="text-[11px] text-emerald-200 truncate max-w-[140px]">
-            {currentOrg?.name || 'WhatsApp Suite'}
+          <h2 className="font-extrabold text-sm tracking-wide">WABizConnect</h2>
+          <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider truncate max-w-[140px]">
+            {currentOrg?.name || 'Business Platform'}
           </p>
         </div>
       </div>
