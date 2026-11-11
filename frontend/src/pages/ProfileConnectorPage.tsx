@@ -29,7 +29,7 @@ export default function ProfileConnectorPage() {
 
   const webhookUrl = import.meta.env.VITE_API_URL
     ? `${import.meta.env.VITE_API_URL}/webhooks/whatsapp`
-    : `${window.location.origin.replace('5173', '4000')}/webhooks/whatsapp`;
+    : 'https://wa-backend-ayta.onrender.com/webhooks/whatsapp';
 
   const copyWebhookUrl = () => {
     navigator.clipboard.writeText(webhookUrl);
