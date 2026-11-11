@@ -1,4 +1,4 @@
-# WABizConnect — Operating Manual & Administrator Guide
+# ReachFlow — Operating Manual & Administrator Guide
 **WhatsApp Business Platform: Broadcasts, Seen/Not-Seen Audit, Customer Management & Inbound Follow-ups**
 
 ---
@@ -19,7 +19,7 @@
 
 ## 1. Overview & Architecture
 
-**WABizConnect** is a Multi-Tenant WhatsApp Business Broadcast and customer engagement web platform. It enables businesses to:
+**ReachFlow** is a Multi-Tenant WhatsApp Business Broadcast and customer engagement web platform. It enables businesses to:
 - Connect their official Meta WhatsApp Business Cloud API.
 - Upsert and import customer databases anytime using normalized **Mobile Number (E.164)** as the primary identifier.
 - Schedule and send daily broadcast posts with image and personalized text.
@@ -30,12 +30,12 @@
 ### Cloud Architecture
 ```
 ┌─────────────────────────────────┐
-│     WABizConnect Frontend       │  Static Web App (Vite + React)
+│       ReachFlow Frontend        │  Static Web App (Vite + React)
 │    (Render Static Site)         │  Hosted at: https://wa-frontend.onrender.com
 └────────────────┬────────────────┘
                  │ REST / Bearer JWT
 ┌────────────────▼────────────────┐
-│      WABizConnect Backend       │  Node.js 22 + Express API
+│       ReachFlow Backend         │  Node.js 22 + Express API
 │   (Render Web Service / Node)   │  Hosted at: https://wa-backend-ayta.onrender.com
 └────────┬───────────────┬────────┘
          │               │
@@ -87,8 +87,8 @@ Each tenant connects their own official WhatsApp Business number.
    - Set Token Expiration to **Never** (Permanent).
    - Copy the generated token string (`EAAG...`).
 
-### Entering Credentials in WABizConnect
-1. In WABizConnect, navigate to **Profile & Meta Connector** (`/profile`).
+### Entering Credentials in ReachFlow
+1. In ReachFlow, navigate to **Profile & Meta Connector** (`/profile`).
 2. Enter:
    - **Phone Number ID**: Paste your 15-digit ID.
    - **WhatsApp Business Account ID (WABA ID)**: Paste your WABA ID.
@@ -103,7 +103,7 @@ Each tenant connects their own official WhatsApp Business number.
 
 Webhooks are required so your server receives real-time delivery receipts (`sent`, `delivered`, `read ✓✓`) and customer replies.
 
-1. In WABizConnect, open **Profile & Meta Connector** (`/profile`) and find the **Webhook Configuration** card.
+1. In ReachFlow, open **Profile & Meta Connector** (`/profile`) and find the **Webhook Configuration** card.
 2. Note the two values:
    - **Callback URL**: `https://wa-backend-ayta.onrender.com/webhooks/whatsapp`
    - **Verify Token**: `wa_verify_token_123456`
@@ -228,7 +228,7 @@ Render's free tier spins down backend services after 15 minutes of inactivity. T
 
 1. Go to **[cron-job.org](https://cron-job.org)** (free service).
 2. Create a new cron job:
-   - **Title**: `WABizConnect Keep-Alive`
+   - **Title**: `ReachFlow Keep-Alive`
    - **URL**: 
      ```text
      https://wa-backend-ayta.onrender.com/internal/tick?secret=wa_cron_secret_789012
@@ -247,3 +247,4 @@ Render's free tier spins down backend services after 15 minutes of inactivity. T
 | **`131047`** | 24-hour customer service window closed | Outside the 24-hour window, you must send an approved Meta template message rather than free-form text. |
 | **`130429`** | Rate limit exceeded | Daily messaging tier reached (e.g. 250 or 1,000/day). Upgrade tier by sending quality broadcasts. |
 | **`100`** | Invalid parameter / phone number ID | Verify that the Phone Number ID in `/profile` belongs to the WhatsApp Business Account. |
+

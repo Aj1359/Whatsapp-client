@@ -76,7 +76,7 @@ export default function LoginPage() {
             </div>
             <div>
               <span className="text-2xl font-black tracking-tight text-white block leading-none">
-                WABizConnect
+                ReachFlow
               </span>
               <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-300/90 block mt-1">
                 WHATSAPP BUSINESS PLATFORM
@@ -138,7 +138,7 @@ export default function LoginPage() {
               <div className="flex items-center justify-between border-b border-gray-800 pb-2 mb-3">
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
-                  <span className="text-xs font-bold text-white">WABizConnect</span>
+                  <span className="text-xs font-bold text-white">ReachFlow</span>
                   <span className="text-[10px] text-gray-400">/ Dashboard</span>
                 </div>
                 <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-semibold">
@@ -201,8 +201,8 @@ export default function LoginPage() {
               </h2>
               <p className="text-xs text-gray-500 font-medium">
                 {mode === 'signin'
-                  ? 'Sign in to your WABizConnect account'
-                  : 'Create your WABizConnect business profile'}
+                  ? 'Sign in to your ReachFlow account'
+                  : 'Create your ReachFlow business profile'}
               </p>
             </div>
 
