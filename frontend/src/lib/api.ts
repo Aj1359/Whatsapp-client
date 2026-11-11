@@ -9,10 +9,7 @@
 
 const LIVE_BACKEND_URL = 'https://wa-backend-ayta.onrender.com';
 
-const API_BASE =
-  typeof window !== 'undefined' && window.location.hostname.includes('onrender.com')
-    ? LIVE_BACKEND_URL
-    : (import.meta.env.VITE_API_URL ?? 'http://localhost:4000');
+const API_BASE = import.meta.env.VITE_API_URL || LIVE_BACKEND_URL;
 
 function getHeaders(): HeadersInit {
   const token = localStorage.getItem('sb-token') ?? 'demo-token';
