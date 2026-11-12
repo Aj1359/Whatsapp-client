@@ -2,20 +2,17 @@ import express, { Request, Response } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import { rateLimit } from 'express-rate-limit';
-import dotenv from 'dotenv';
-dotenv.config();
-
+import { env } from './config/env.js';
 import webhooksRouter from './routes/webhooks.js';
 import internalRouter from './routes/internal.js';
 import contactsRouter from './routes/contacts.js';
-import broadcastsRouter from './routes/broadcasts.js';
-import credentialsRouter from './routes/credentials.js';
+import templatesRouter from './routes/templates.js';
 import settingsRouter from './routes/settings.js';
 import repliesRouter from './routes/replies.js';
 
 export const app = express();
 
-// PRD Security specs: helmet configured for cross-origin APIs, CORS allows frontend
+// Security headers
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -23,16 +20,17 @@ app.use(
   })
 );
 
+// Strict CORS: Limited to configured FRONTEND_ORIGIN only
 app.use(
   cors({
-    origin: true,
+    origin: env.FRONTEND_ORIGIN,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Org-Id', 'X-Requested-With', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Org-Id', 'X-Requested-With', 'Accept', 'X-Cron-Secret'],
   })
 );
 
-// Capture raw body for webhook signature verification
+// Capture raw body for webhook HMAC signature verification
 app.use(
   express.json({
     limit: '15mb',
@@ -51,7 +49,7 @@ const globalLimiter = rateLimit({
 });
 app.use(globalLimiter);
 
-// Health check endpoint (PRD Page 13: GET /healthz)
+// Public health check endpoint
 app.get('/healthz', (_req: Request, res: Response) => {
   res.status(200).send('OK');
 });
@@ -60,14 +58,11 @@ app.get('/healthz', (_req: Request, res: Response) => {
 app.use('/webhooks', webhooksRouter);
 app.use('/internal', internalRouter);
 app.use('/api/contacts', contactsRouter);
-app.use('/api/campaigns', broadcastsRouter);
-app.use('/api/broadcasts', broadcastsRouter);
+app.use('/api/templates', templatesRouter);
 app.use('/api/settings', settingsRouter);
-app.use('/api/credentials', credentialsRouter);
 app.use('/api/replies', repliesRouter);
 
-// Standard JSON response envelope format per PRD Page 12:
-// { "data": ... } on success and { "error": { "code", "message" } } on failure.
+// Standard JSON error handling envelope format: { "error": { "code", "message" } }
 app.use((err: any, _req: Request, res: Response, _next: any) => {
   console.error('Unhandled error:', err);
   const status = err.status || 500;
@@ -78,4 +73,3 @@ app.use((err: any, _req: Request, res: Response, _next: any) => {
     },
   });
 });
-
