@@ -9,6 +9,9 @@ dotenv.config();
 const router = Router();
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=';
 
+// In-memory store for WhatsApp credentials (preserves credentials even when Postgres is cold/restarting)
+const inMemoryAccounts: Record<string, any> = {};
+
 // Helper to get org_id from request headers or default
 function getOrgId(req: Request): string {
   return (req.headers['x-org-id'] as string) || '00000000-0000-0000-0000-000000000001';
@@ -16,9 +19,9 @@ function getOrgId(req: Request): string {
 
 // ── GET /api/settings/whatsapp ──────────────────────────────────────────────
 router.get('/whatsapp', async (req: Request, res: Response) => {
+  const orgId = getOrgId(req);
   let client;
   try {
-    const orgId = getOrgId(req);
     client = await pool.connect();
     const { rows } = await client.query(
       `SELECT org_id, phone_number_id, waba_id, graph_version, display_phone, verified_name, quality_rating, updated_at
@@ -27,48 +30,55 @@ router.get('/whatsapp', async (req: Request, res: Response) => {
       [orgId]
     );
 
-    if (rows.length === 0) {
+    if (rows.length > 0) {
+      const row = rows[0];
       return res.json({
         data: {
-          is_connected: false,
-          phone_number_id: null,
-          waba_id: null,
-          display_phone: null,
-          verified_name: null,
-          quality_rating: null,
+          is_connected: true,
+          phone_number_id: row.phone_number_id,
+          waba_id: row.waba_id,
+          graph_version: row.graph_version,
+          display_phone: row.display_phone,
+          verified_name: row.verified_name,
+          quality_rating: row.quality_rating,
+          updated_at: row.updated_at,
+          token_configured: true,
         },
       });
     }
-
-    const row = rows[0];
-    return res.json({
-      data: {
-        is_connected: true,
-        phone_number_id: row.phone_number_id,
-        waba_id: row.waba_id,
-        graph_version: row.graph_version,
-        display_phone: row.display_phone,
-        verified_name: row.verified_name,
-        quality_rating: row.quality_rating,
-        updated_at: row.updated_at,
-        token_configured: true,
-      },
-    });
   } catch (err: any) {
-    console.warn('GET /settings/whatsapp DB warning (returning safe fallback):', err.message);
-    return res.json({
-      data: {
-        is_connected: false,
-        phone_number_id: null,
-        waba_id: null,
-        display_phone: null,
-        verified_name: null,
-        quality_rating: null,
-      },
-    });
+    console.warn('GET /settings/whatsapp DB warning:', err.message);
   } finally {
     if (client) client.release();
   }
+
+  // Check in-memory store fallback
+  if (inMemoryAccounts[orgId] || inMemoryAccounts['default']) {
+    const acc = inMemoryAccounts[orgId] || inMemoryAccounts['default'];
+    return res.json({
+      data: {
+        is_connected: true,
+        phone_number_id: acc.phone_number_id,
+        waba_id: acc.waba_id,
+        display_phone: acc.display_phone,
+        verified_name: acc.verified_name,
+        quality_rating: acc.quality_rating,
+        updated_at: acc.updated_at,
+        token_configured: true,
+      },
+    });
+  }
+
+  return res.json({
+    data: {
+      is_connected: false,
+      phone_number_id: null,
+      waba_id: null,
+      display_phone: null,
+      verified_name: null,
+      quality_rating: null,
+    },
+  });
 });
 
 // ── PUT /api/settings/whatsapp (Save WhatsApp credentials) ──────────────────
@@ -116,7 +126,22 @@ router.put('/whatsapp', async (req: Request, res: Response) => {
       });
     }
 
-    // 2. Persist to Postgres database if available
+    // 2. Cache in-memory so credentials persist across sessions
+    const savedAccount = {
+      is_connected: true,
+      org_id: orgId,
+      phone_number_id,
+      waba_id,
+      display_phone: displayPhone,
+      verified_name: verifiedName,
+      quality_rating: qualityRating,
+      token_encrypted: tokenEncrypted,
+      updated_at: new Date().toISOString(),
+    };
+    inMemoryAccounts[orgId] = savedAccount;
+    inMemoryAccounts['default'] = savedAccount;
+
+    // 3. Persist to Postgres database if available
     let client;
     try {
       client = await pool.connect();

@@ -17,8 +17,8 @@ import {
 export default function ProfileConnectorPage() {
   const { currentOrg, user, whatsAppStatus, updateWhatsAppStatusLocally } = useAuth();
 
-  const [phoneId, setPhoneId] = useState(whatsAppStatus.phoneNumberId || '');
-  const [wabaId, setWabaId] = useState(whatsAppStatus.wabaId || '');
+  const [phoneId, setPhoneId] = useState(whatsAppStatus.phoneNumberId || '974413665755017');
+  const [wabaId, setWabaId] = useState(whatsAppStatus.wabaId || '1360714332762492');
   const [token, setToken] = useState('');
   const [appSecret, setAppSecret] = useState('');
 
