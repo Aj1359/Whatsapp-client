@@ -53,8 +53,8 @@ router.get('/whatsapp', async (req: Request, res: Response) => {
   }
 
   // Check in-memory store fallback
-  if (inMemoryAccounts[orgId] || inMemoryAccounts['default']) {
-    const acc = inMemoryAccounts[orgId] || inMemoryAccounts['default'];
+  if (inMemoryAccounts[orgId]) {
+    const acc = inMemoryAccounts[orgId];
     return res.json({
       data: {
         is_connected: true,
@@ -397,8 +397,8 @@ router.post('/whatsapp/broadcast-template', async (req: Request, res: Response) 
 // ── POST /api/settings/whatsapp/subscribe-waba ──────────────────────────────
 router.post('/whatsapp/subscribe-waba', async (req: Request, res: Response) => {
   const orgId = getOrgId(req);
-  const acc = inMemoryAccounts[orgId] || inMemoryAccounts['default'] || {};
-  const wabaId = req.body.waba_id || acc.waba_id || process.env.WHATSAPP_WABA_ID || '1360714332762492';
+  const acc = inMemoryAccounts[orgId] || {};
+  const wabaId = req.body.waba_id || acc.waba_id || process.env.WHATSAPP_WABA_ID;
   const token =
     req.body.token ||
     acc.token_plain ||

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 import {
   BarChart3,
@@ -22,6 +23,7 @@ import { cn } from '../lib/utils';
 
 export default function SimpleDashboard() {
   const navigate = useNavigate();
+  const { currentOrg, whatsAppStatus } = useAuth();
   const [broadcasts, setBroadcasts] = useState<any[]>([]);
   const [contacts, setContacts] = useState<any[]>([]);
   const [selectedBroadcastId, setSelectedBroadcastId] = useState<string | number | null>(null);
@@ -360,7 +362,7 @@ export default function SimpleDashboard() {
             </span>
           </div>
           <p className="text-[10px] text-emerald-800 truncate">
-            Aritra (WABA: 1360714332762492)
+            {whatsAppStatus?.verifiedName || currentOrg?.name || 'Account'} {whatsAppStatus?.wabaId ? `(WABA: ${whatsAppStatus.wabaId})` : ''}
           </p>
         </div>
       </div>
@@ -392,7 +394,7 @@ export default function SimpleDashboard() {
               Check Meta Invoices & Charges <ExternalLink size={12} />
             </a>
             <a
-              href="https://business.facebook.com/wa/manage/home/?waba_id=1360714332762492"
+              href={whatsAppStatus?.wabaId ? `https://business.facebook.com/wa/manage/home/?waba_id=${whatsAppStatus.wabaId}` : "https://business.facebook.com/wa/manage/home/"}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-secondary text-xs px-3.5 py-1.5 flex items-center gap-1.5"
@@ -591,7 +593,7 @@ export default function SimpleDashboard() {
             <div className="border-b pb-3">
               <h2 className="text-base font-bold text-gray-900">Sync Meta Available Balance</h2>
               <p className="text-[11px] text-gray-500 font-mono">
-                Account: Aritra (ID: 1360714332762492)
+                Account: {whatsAppStatus?.verifiedName || currentOrg?.name || 'Account'} {whatsAppStatus?.wabaId ? `(ID: ${whatsAppStatus.wabaId})` : ''}
               </p>
             </div>
 

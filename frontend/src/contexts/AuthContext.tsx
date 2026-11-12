@@ -48,42 +48,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [whatsAppStatus, setWhatsAppStatus] = useState<WhatsAppProfileStatus>(() => {
     try {
-      const saved = localStorage.getItem('reachflow-active-wa');
-      if (saved) return JSON.parse(saved);
+      const activeOrgId = localStorage.getItem('active-org-id');
+      const userKey = activeOrgId ? `reachflow-active-wa-${activeOrgId}` : 'reachflow-active-wa';
+      const saved = localStorage.getItem(userKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.phoneNumberId) return parsed;
+      }
     } catch {}
     return {
-      isConnected: true,
-      phoneNumberId: '974413665755017',
-      wabaId: '1360714332762492',
-      displayPhone: '+91 82408 13577',
-      verifiedName: 'Aritra',
-      qualityRating: 'GREEN',
+      isConnected: false,
     };
   });
 
-  const refreshWhatsAppStatus = async () => {
+  const refreshWhatsAppStatus = async (targetOrgId?: string) => {
+    const orgId = targetOrgId || currentOrg?.id || localStorage.getItem('active-org-id');
+    const userKey = orgId ? `reachflow-active-wa-${orgId}` : 'reachflow-active-wa';
+
     try {
       const res: any = await api.settings.getWhatsApp();
-      if (res && res.is_connected) {
+      if (res && res.is_connected && res.phone_number_id) {
         const next: WhatsAppProfileStatus = {
           isConnected: true,
           phoneNumberId: res.phone_number_id,
           wabaId: res.waba_id,
-          displayPhone: res.display_phone || '+91 82408 13577',
-          verifiedName: res.verified_name || 'Aritra',
+          displayPhone: res.display_phone || res.phone_number_id,
+          verifiedName: res.verified_name || currentOrg?.name || 'Verified WhatsApp Profile',
           qualityRating: res.quality_rating || 'GREEN',
         };
         setWhatsAppStatus(next);
+        localStorage.setItem(userKey, JSON.stringify(next));
         localStorage.setItem('reachflow-active-wa', JSON.stringify(next));
+        return;
       }
     } catch (err) {
       console.warn('refreshWhatsAppStatus fallback:', err);
     }
+
+    // Check organization-specific storage
+    if (orgId) {
+      const saved = localStorage.getItem(userKey);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.phoneNumberId) {
+            setWhatsAppStatus(parsed);
+            localStorage.setItem('reachflow-active-wa', JSON.stringify(parsed));
+            return;
+          }
+        } catch {}
+      }
+    }
+
+    // Default: New client starts disconnected
+    setWhatsAppStatus({ isConnected: false });
+    localStorage.removeItem('reachflow-active-wa');
   };
 
   const updateWhatsAppStatusLocally = (status: Partial<WhatsAppProfileStatus>) => {
     setWhatsAppStatus((prev) => {
       const next = { ...prev, ...status };
+      const orgId = currentOrg?.id || localStorage.getItem('active-org-id');
+      if (orgId) {
+        localStorage.setItem(`reachflow-active-wa-${orgId}`, JSON.stringify(next));
+      }
       localStorage.setItem('reachflow-active-wa', JSON.stringify(next));
       return next;
     });
@@ -257,6 +285,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setWhatsAppStatus({ isConnected: false });
     localStorage.removeItem('sb-token');
     localStorage.removeItem('active-org-id');
+    localStorage.removeItem('reachflow-active-wa');
   };
 
   const switchOrg = (orgId: string) => {

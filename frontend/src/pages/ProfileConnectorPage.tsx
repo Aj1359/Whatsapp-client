@@ -17,10 +17,38 @@ import {
 export default function ProfileConnectorPage() {
   const { currentOrg, user, whatsAppStatus, updateWhatsAppStatusLocally } = useAuth();
 
-  const [phoneId, setPhoneId] = useState(whatsAppStatus.phoneNumberId || '974413665755017');
-  const [wabaId, setWabaId] = useState(whatsAppStatus.wabaId || '1360714332762492');
+  const [phoneId, setPhoneId] = useState(whatsAppStatus.phoneNumberId || '');
+  const [wabaId, setWabaId] = useState(whatsAppStatus.wabaId || '');
   const [token, setToken] = useState('');
   const [appSecret, setAppSecret] = useState('');
+
+  // Keep inputs synced when switching accounts or user logs in
+  React.useEffect(() => {
+    setPhoneId(whatsAppStatus.phoneNumberId || '');
+    setWabaId(whatsAppStatus.wabaId || '');
+  }, [whatsAppStatus.phoneNumberId, whatsAppStatus.wabaId]);
+
+  const handleDisconnect = () => {
+    if (confirm('Are you sure you want to disconnect this WhatsApp profile? You can reconnect anytime with new credentials.')) {
+      setPhoneId('');
+      setWabaId('');
+      setToken('');
+      setTestResult(null);
+      updateWhatsAppStatusLocally({
+        isConnected: false,
+        phoneNumberId: '',
+        wabaId: '',
+        displayPhone: '',
+        verifiedName: '',
+        qualityRating: '',
+      });
+      localStorage.removeItem('reachflow-active-wa');
+      const orgId = currentOrg?.id || localStorage.getItem('active-org-id');
+      if (orgId) {
+        localStorage.removeItem(`reachflow-active-wa-${orgId}`);
+      }
+    }
+  };
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
@@ -223,6 +251,16 @@ export default function ProfileConnectorPage() {
             <button type="submit" className="btn-primary text-xs px-6 py-2 shadow">
               Save & Link to Backend
             </button>
+
+            {whatsAppStatus.isConnected && (
+              <button
+                type="button"
+                onClick={handleDisconnect}
+                className="btn-secondary text-xs px-4 py-2 text-red-700 border-red-200 hover:bg-red-50 sm:ml-auto"
+              >
+                Disconnect / Switch Client
+              </button>
+            )}
           </div>
 
           {/* Test connection feedback */}

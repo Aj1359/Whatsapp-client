@@ -105,7 +105,7 @@ export default function PostsTemplatesPage() {
     try {
       const metaCreds = JSON.parse(localStorage.getItem('reachflow-active-wa') || '{}');
       const remoteList = await api.settings.listTemplates({
-        waba_id: metaCreds.waba_id || '1360714332762492',
+        waba_id: metaCreds.waba_id || '',
         token: metaCreds.token || undefined,
       });
 
@@ -601,8 +601,9 @@ function TestSendModal({
   onClose: () => void;
   onSent: (res: any) => void;
 }) {
-  const [phone, setPhone] = useState('+918240813577');
-  const [customerName, setCustomerName] = useState('Aritra');
+  const metaCreds = JSON.parse(localStorage.getItem('reachflow-active-wa') || '{}');
+  const [phone, setPhone] = useState(metaCreds.displayPhone || '');
+  const [customerName, setCustomerName] = useState(metaCreds.verifiedName || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -693,7 +694,7 @@ function TestSendModal({
               className="input font-mono font-bold"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="+918240813577"
+              placeholder="+919876543210"
               required
             />
           </div>
@@ -705,7 +706,7 @@ function TestSendModal({
               className="input"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
-              placeholder="e.g. Aritra"
+              placeholder="e.g. John"
             />
           </div>
 

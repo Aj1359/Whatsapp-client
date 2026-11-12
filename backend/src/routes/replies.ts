@@ -35,7 +35,7 @@ router.post('/send', async (req: Request, res: Response) => {
 
   const { to, text, template_name, language_code, header_image_url, phone_number_id: bodyPhoneId, token: bodyToken } = parsed.data;
   const acc = inMemoryAccounts['default'] || {};
-  const phoneId = bodyPhoneId || acc.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || '974413665755017';
+  const phoneId = bodyPhoneId || acc.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID;
   const token =
     bodyToken ||
     acc.token_plain ||
