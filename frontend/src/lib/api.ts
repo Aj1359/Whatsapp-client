@@ -314,7 +314,14 @@ export const api = {
 
   replies: {
     list: () => safeFetch('/api/replies', { method: 'GET' }, mockData.replies),
-    send: async (data: { to: string | string[]; text: string; phone_number_id?: string; token?: string }) => {
+    send: async (data: {
+      to: string | string[];
+      text?: string;
+      template_name?: string;
+      language_code?: string;
+      phone_number_id?: string;
+      token?: string;
+    }) => {
       const res = await fetch(`${API_BASE}/api/replies/send`, {
         method: 'POST',
         headers: getHeaders(),

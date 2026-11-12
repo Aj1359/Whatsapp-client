@@ -16,10 +16,13 @@ router.get('/', (_req: Request, res: Response) => {
   });
 });
 
-// POST /api/replies/send — Dispatches direct text response to customer
+// POST /api/replies/send — Dispatches direct text response or broadcast follow-up
 const sendReplySchema = z.object({
   to: z.union([z.string(), z.array(z.string())]),
-  text: z.string().min(1),
+  text: z.string().optional(),
+  template_name: z.string().optional(),
+  language_code: z.string().optional(),
+  header_image_url: z.string().optional(),
   phone_number_id: z.string().optional(),
   token: z.string().optional(),
 });
@@ -30,7 +33,7 @@ router.post('/send', async (req: Request, res: Response) => {
     return res.status(400).json({ error: { code: 'INVALID_INPUT', issues: parsed.error.issues } });
   }
 
-  const { to, text, phone_number_id: bodyPhoneId, token: bodyToken } = parsed.data;
+  const { to, text, template_name, language_code, header_image_url, phone_number_id: bodyPhoneId, token: bodyToken } = parsed.data;
   const acc = inMemoryAccounts['default'] || {};
   const phoneId = bodyPhoneId || acc.phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID || '974413665755017';
   const token =
@@ -57,24 +60,58 @@ router.post('/send', async (req: Request, res: Response) => {
     }
 
     try {
-      const sendRes = await waClient.sendFreeForm(phoneId, token, cleaned, 'text', { text });
-      if (sendRes.success) {
-        sentCount++;
-        results.push({ to: cleaned, status: 'sent', wa_message_id: sendRes.wa_message_id });
+      if (template_name) {
+        // Send as WhatsApp approved template
+        const components: any[] = [];
+        if (header_image_url) {
+          components.push({
+            type: 'header',
+            parameters: [{ type: 'image', image: { link: header_image_url } }],
+          });
+        }
+        const sendRes = await waClient.sendTemplate(
+          phoneId,
+          token,
+          cleaned,
+          template_name,
+          language_code || 'en',
+          components
+        );
+        if (sendRes.success) {
+          sentCount++;
+          results.push({ to: cleaned, status: 'sent', wa_message_id: sendRes.wa_message_id });
+        } else {
+          failedCount++;
+          results.push({ to: cleaned, status: 'failed', error: sendRes.error?.message || 'Template send failed' });
+        }
+      } else if (text) {
+        // Send as 24h Customer Service freeform text
+        const sendRes = await waClient.sendFreeForm(phoneId, token, cleaned, 'text', { text });
+        if (sendRes.success) {
+          sentCount++;
+          results.push({ to: cleaned, status: 'sent', wa_message_id: sendRes.wa_message_id });
+        } else {
+          failedCount++;
+          results.push({ to: cleaned, status: 'failed', error: 'Failed to send' });
+        }
       } else {
         failedCount++;
-        results.push({ to: cleaned, status: 'failed', error: 'Failed to send' });
+        results.push({ to: cleaned, status: 'failed', error: 'Either text or template_name must be provided' });
       }
     } catch (err: any) {
       failedCount++;
       results.push({ to: cleaned, status: 'failed', error: err.message });
     }
+
+    // Rate pacing
+    await new Promise((r) => setTimeout(r, 60));
   }
 
   return res.json({
     data: {
       sent: sentCount,
       failed: failedCount,
+      total: targets.length,
       results,
     },
   });
