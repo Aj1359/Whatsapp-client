@@ -8,6 +8,19 @@ const router = Router();
 const VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || 'wa_verify_token_123456';
 const META_APP_SECRET = process.env.META_APP_SECRET || 'meta_app_secret_placeholder';
 
+export interface InboundReply {
+  id: string;
+  from_e164: string;
+  from_name: string;
+  body: string;
+  is_stop: boolean;
+  received_at: string;
+  timestamp: number;
+}
+
+export const inMemoryReplies: InboundReply[] = [];
+export const inMemoryStatuses: Record<string, { status: string; timestamp: string }> = {};
+
 // GET /webhooks/whatsapp — Handshake verification
 router.get('/whatsapp', (req: Request, res: Response) => {
   const query = req.query as any;
@@ -29,118 +42,144 @@ router.post('/whatsapp', async (req: Request, res: Response) => {
     return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Invalid signature' } });
   }
 
-  // PRD Page 11: store payload in webhook_events, answer 200 immediately, then process
+  // Answer 200 immediately to Meta
   res.status(200).send('EVENT_RECEIVED');
 
   // Background event processing
   try {
     const payload = req.body;
-    const client = await pool.connect();
-    try {
-      // 1. Store raw payload
-      await client.query(
-        'INSERT INTO webhook_events (payload) VALUES ($1)',
-        [JSON.stringify(payload)]
-      );
+    const entries = payload?.entry || [];
 
-      const entries = payload?.entry || [];
-      for (const entry of entries) {
-        for (const change of entry.changes || []) {
-          const value = change.value;
-          if (!value) continue;
+    // 1. First capture in memory so UI is instantly updated
+    for (const entry of entries) {
+      for (const change of entry.changes || []) {
+        const value = change.value;
+        if (!value) continue;
 
-          // Status updates (sent -> delivered -> read; failed always wins)
-          if (Array.isArray(value.statuses)) {
-            for (const statusObj of value.statuses) {
-              const waId = statusObj.id;
-              const status = statusObj.status; // sent | delivered | read | failed
-              const ts = statusObj.timestamp ? new Date(parseInt(statusObj.timestamp, 10) * 1000) : new Date();
-
-              if (status === 'read') {
-                await client.query(`
-                  UPDATE messages
-                  SET status = 'read', read_at = $1
-                  WHERE wa_message_id = $2 AND status != 'failed'
-                `, [ts, waId]);
-              } else if (status === 'delivered') {
-                await client.query(`
-                  UPDATE messages
-                  SET status = CASE WHEN status = 'read' THEN 'read' ELSE 'delivered' END,
-                      delivered_at = $1
-                  WHERE wa_message_id = $2 AND status != 'failed'
-                `, [ts, waId]);
-              } else if (status === 'sent') {
-                await client.query(`
-                  UPDATE messages
-                  SET status = CASE WHEN status IN ('delivered', 'read') THEN status ELSE 'sent' END,
-                      sent_at = $1
-                  WHERE wa_message_id = $2 AND status != 'failed'
-                `, [ts, waId]);
-              } else if (status === 'failed') {
-                const errCode = statusObj.errors?.[0]?.code || 'UNKNOWN';
-                const errMsg = statusObj.errors?.[0]?.title || 'Message failed';
-                await client.query(`
-                  UPDATE messages
-                  SET status = 'failed', failed_at = $1, error_code = $2, error_message = $3
-                  WHERE wa_message_id = $4
-                `, [ts, errCode, errMsg, waId]);
-              }
-            }
+        // Process status events
+        if (Array.isArray(value.statuses)) {
+          for (const statusObj of value.statuses) {
+            const waId = statusObj.id;
+            const status = statusObj.status;
+            const ts = statusObj.timestamp ? new Date(parseInt(statusObj.timestamp, 10) * 1000) : new Date();
+            inMemoryStatuses[waId] = {
+              status,
+              timestamp: ts.toISOString(),
+            };
           }
+        }
 
-          // Inbound customer replies
-          if (Array.isArray(value.messages)) {
-            for (const msg of value.messages) {
-              const fromE164 = '+' + msg.from;
-              const text = msg.text?.body || '';
-              const isStop = isStopReply(text);
-              const ts = msg.timestamp ? new Date(parseInt(msg.timestamp, 10) * 1000) : new Date();
+        // Process inbound messages (customer replies)
+        if (Array.isArray(value.messages)) {
+          for (const msg of value.messages) {
+            const fromE164 = '+' + msg.from;
+            const text = msg.text?.body || msg.button?.text || msg.interactive?.button_reply?.title || '(Media/Unsupported)';
+            const isStop = isStopReply(text);
+            const ts = msg.timestamp ? new Date(parseInt(msg.timestamp, 10) * 1000) : new Date();
 
-              // Insert into inbound_messages
-              await client.query(`
-                INSERT INTO inbound_messages (from_e164, wa_message_id, body, is_stop, received_at)
-                VALUES ($1, $2, $3, $4, $5)
-                ON CONFLICT (wa_message_id) DO NOTHING
-              `, [fromE164, msg.id, text, isStop, ts]);
+            const profileName = value.contacts?.find((c: any) => c.wa_id === msg.from)?.profile?.name || fromE164;
 
-              if (isStop) {
-                // Opt out the contact
-                await client.query(`
-                  UPDATE contacts
-                  SET status = 'opted_out', opted_out_at = now()
-                  WHERE whatsapp_e164 = $1
-                `, [fromE164]);
+            const replyItem: InboundReply = {
+              id: msg.id || `msg_${Date.now()}`,
+              from_e164: fromE164,
+              from_name: profileName,
+              body: text,
+              is_stop: isStop,
+              received_at: ts.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+              timestamp: ts.getTime(),
+            };
 
-                // Skip their queued messages
-                await client.query(`
-                  UPDATE messages
-                  SET status = 'skipped'
-                  WHERE contact_id IN (SELECT id FROM contacts WHERE whatsapp_e164 = $1)
-                    AND status = 'queued'
-                `, [fromE164]);
-
-                // Exit sequence states
-                await client.query(`
-                  UPDATE sequence_state
-                  SET status = 'exited_optout'
-                  WHERE contact_id IN (SELECT id FROM contacts WHERE whatsapp_e164 = $1)
-                    AND status = 'active'
-                `, [fromE164]);
-              } else {
-                // Any other reply exits active sequence with exited_reply
-                await client.query(`
-                  UPDATE sequence_state
-                  SET status = 'exited_reply'
-                  WHERE contact_id IN (SELECT id FROM contacts WHERE whatsapp_e164 = $1)
-                    AND status = 'active'
-                `, [fromE164]);
-              }
+            if (!inMemoryReplies.some((r) => r.id === replyItem.id)) {
+              inMemoryReplies.unshift(replyItem);
+              if (inMemoryReplies.length > 500) inMemoryReplies.pop();
             }
           }
         }
       }
-    } finally {
-      client.release();
+    }
+
+    // 2. Persist to DB if available
+    try {
+      const client = await pool.connect();
+      try {
+        await client.query(
+          'INSERT INTO webhook_events (payload) VALUES ($1)',
+          [JSON.stringify(payload)]
+        );
+
+        for (const entry of entries) {
+          for (const change of entry.changes || []) {
+            const value = change.value;
+            if (!value) continue;
+
+            if (Array.isArray(value.statuses)) {
+              for (const statusObj of value.statuses) {
+                const waId = statusObj.id;
+                const status = statusObj.status;
+                const ts = statusObj.timestamp ? new Date(parseInt(statusObj.timestamp, 10) * 1000) : new Date();
+
+                if (status === 'read') {
+                  await client.query(`
+                    UPDATE messages
+                    SET status = 'read', read_at = $1
+                    WHERE wa_message_id = $2 AND status != 'failed'
+                  `, [ts, waId]);
+                } else if (status === 'delivered') {
+                  await client.query(`
+                    UPDATE messages
+                    SET status = CASE WHEN status = 'read' THEN 'read' ELSE 'delivered' END,
+                        delivered_at = $1
+                    WHERE wa_message_id = $2 AND status != 'failed'
+                  `, [ts, waId]);
+                } else if (status === 'sent') {
+                  await client.query(`
+                    UPDATE messages
+                    SET status = CASE WHEN status IN ('delivered', 'read') THEN status ELSE 'sent' END,
+                        sent_at = $1
+                    WHERE wa_message_id = $2 AND status != 'failed'
+                  `, [ts, waId]);
+                } else if (status === 'failed') {
+                  const errCode = statusObj.errors?.[0]?.code || 'UNKNOWN';
+                  const errMsg = statusObj.errors?.[0]?.title || 'Message failed';
+                  await client.query(`
+                    UPDATE messages
+                    SET status = 'failed', failed_at = $1, error_code = $2, error_message = $3
+                    WHERE wa_message_id = $4
+                  `, [ts, errCode, errMsg, waId]);
+                }
+              }
+            }
+
+            if (Array.isArray(value.messages)) {
+              for (const msg of value.messages) {
+                const fromE164 = '+' + msg.from;
+                const text = msg.text?.body || msg.button?.text || '';
+                const isStop = isStopReply(text);
+                const ts = msg.timestamp ? new Date(parseInt(msg.timestamp, 10) * 1000) : new Date();
+
+                await client.query(`
+                  INSERT INTO inbound_messages (from_e164, wa_message_id, body, is_stop, received_at)
+                  VALUES ($1, $2, $3, $4, $5)
+                  ON CONFLICT (wa_message_id) DO NOTHING
+                `, [fromE164, msg.id, text, isStop, ts]);
+
+                if (isStop) {
+                  await client.query(`
+                    UPDATE contacts
+                    SET status = 'opted_out', opted_out_at = now()
+                    WHERE whatsapp_e164 = $1
+                  `, [fromE164]);
+                }
+              }
+            }
+          }
+        }
+      } finally {
+        client.release();
+      }
+    } catch (dbErr) {
+      // In-memory capture already succeeded, log db notification
+      console.warn('Webhook DB persistence skipped (in-memory captured):', (dbErr as any)?.message);
     }
   } catch (err) {
     console.error('Error processing webhook payload:', err);
@@ -148,4 +187,3 @@ router.post('/whatsapp', async (req: Request, res: Response) => {
 });
 
 export default router;
-

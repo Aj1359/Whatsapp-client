@@ -11,6 +11,7 @@ import contactsRouter from './routes/contacts.js';
 import broadcastsRouter from './routes/broadcasts.js';
 import credentialsRouter from './routes/credentials.js';
 import settingsRouter from './routes/settings.js';
+import repliesRouter from './routes/replies.js';
 
 export const app = express();
 
@@ -63,6 +64,7 @@ app.use('/api/campaigns', broadcastsRouter);
 app.use('/api/broadcasts', broadcastsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/credentials', credentialsRouter);
+app.use('/api/replies', repliesRouter);
 
 // Standard JSON response envelope format per PRD Page 12:
 // { "data": ... } on success and { "error": { "code", "message" } } on failure.

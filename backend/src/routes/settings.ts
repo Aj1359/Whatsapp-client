@@ -7,13 +7,13 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const router = Router();
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=';
+export const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=';
 
 // In-memory store for WhatsApp credentials (preserves credentials even when Postgres is cold/restarting)
-const inMemoryAccounts: Record<string, any> = {};
+export const inMemoryAccounts: Record<string, any> = {};
 
 // Helper to get org_id from request headers or default
-function getOrgId(req: Request): string {
+export function getOrgId(req: Request): string {
   return (req.headers['x-org-id'] as string) || '00000000-0000-0000-0000-000000000001';
 }
 

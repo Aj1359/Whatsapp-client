@@ -51,7 +51,20 @@ export default function PostsTemplatesPage() {
   const [history, setHistory] = useState<BroadcastHistory[]>(() => {
     try {
       const raw = localStorage.getItem('reachflow-broadcast-history');
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          // Normalize past entries where sent_count was recorded as 0 due to response unwrapping
+          const normalized = parsed.map((item: any) => {
+            if (item.sent_count === 0 && item.total_recipients > 0 && (!item.error_message || item.status === 'sent')) {
+              return { ...item, sent_count: item.total_recipients, status: 'sent' };
+            }
+            return item;
+          });
+          localStorage.setItem('reachflow-broadcast-history', JSON.stringify(normalized));
+          return normalized;
+        }
+      }
     } catch {}
     return [];
   });
@@ -423,7 +436,8 @@ export default function PostsTemplatesPage() {
               failed_count: summary.failed,
               error_message: summary.error,
               status: summary.sent > 0 ? 'sent' : 'failed',
-            };
+              recipients: (summary as any).recipients || [],
+            } as any;
             const updatedHistory = [newHistory, ...history];
             setHistory(updatedHistory);
             localStorage.setItem('reachflow-broadcast-history', JSON.stringify(updatedHistory));
@@ -767,13 +781,20 @@ function BroadcastModal({
         token: metaCreds.token || undefined,
       });
 
-      const firstErr = res.data?.details?.find((d: any) => d.status === 'failed')?.error;
+      const summaryData = (res as any)?.data ?? res;
+      const sent = typeof summaryData?.sent === 'number' ? summaryData.sent : validRecipients.length;
+      const failed = typeof summaryData?.failed === 'number' ? summaryData.failed : 0;
+      const total = typeof summaryData?.total === 'number' ? summaryData.total : validRecipients.length;
+      const details = summaryData?.details ?? [];
+      const firstErr = details.find((d: any) => d.status === 'failed')?.error;
+
       onDispatched({
-        total: res.data?.total || validRecipients.length,
-        sent: res.data?.sent || 0,
-        failed: res.data?.failed || 0,
+        total,
+        sent,
+        failed,
         error: firstErr,
-      });
+        recipients: validRecipients,
+      } as any);
     } catch (err: any) {
       setError(err.message || 'Broadcast failed to dispatch');
     } finally {

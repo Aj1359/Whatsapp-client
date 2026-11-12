@@ -314,9 +314,29 @@ export const api = {
 
   replies: {
     list: () => safeFetch('/api/replies', { method: 'GET' }, mockData.replies),
-    markHandled: (id: number) => {
-      const found = mockData.replies.find(r => r.id === id);
-      if (found) found.handled = true;
+    send: async (data: { to: string | string[]; text: string; phone_number_id?: string; token?: string }) => {
+      const res = await fetch(`${API_BASE}/api/replies/send`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error?.message || 'Failed to dispatch reply');
+      }
+      return json.data ?? json;
+    },
+    testSeed: async (data?: { from_e164?: string; from_name?: string; body?: string }) => {
+      const res = await fetch(`${API_BASE}/api/replies/test-seed`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data || {}),
+      });
+      return res.json();
+    },
+    markHandled: (id: number | string) => {
+      const found = mockData.replies.find((r: any) => r.id === id);
+      if (found) (found as any).handled = true;
       return Promise.resolve({ success: true });
     },
   },
