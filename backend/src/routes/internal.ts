@@ -20,8 +20,9 @@ router.all('/tick', async (req: Request, res: Response) => {
     return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid cron secret' } });
   }
 
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     // Try to acquire Postgres advisory lock so overlapping calls do nothing
     const lockRes = await client.query('SELECT pg_try_advisory_lock($1) as acquired', [ADVISORY_LOCK_ID]);
     const acquired = lockRes.rows[0]?.acquired;
@@ -70,10 +71,12 @@ router.all('/tick', async (req: Request, res: Response) => {
       },
     });
   } catch (err: any) {
-    await client.query('SELECT pg_advisory_unlock($1)', [ADVISORY_LOCK_ID]).catch(() => {});
+    if (client) {
+      await client.query('SELECT pg_advisory_unlock($1)', [ADVISORY_LOCK_ID]).catch(() => {});
+    }
     return res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: err.message } });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 

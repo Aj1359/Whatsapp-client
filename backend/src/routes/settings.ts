@@ -16,9 +16,10 @@ function getOrgId(req: Request): string {
 
 // ── GET /api/settings/whatsapp ──────────────────────────────────────────────
 router.get('/whatsapp', async (req: Request, res: Response) => {
-  const orgId = getOrgId(req);
-  const client = await pool.connect();
+  let client;
   try {
+    const orgId = getOrgId(req);
+    client = await pool.connect();
     const { rows } = await client.query(
       `SELECT org_id, phone_number_id, waba_id, graph_version, display_phone, verified_name, quality_rating, updated_at
        FROM whatsapp_accounts
@@ -54,9 +55,19 @@ router.get('/whatsapp', async (req: Request, res: Response) => {
       },
     });
   } catch (err: any) {
-    return res.status(500).json({ error: { code: 'DB_ERROR', message: err.message } });
+    console.warn('GET /settings/whatsapp DB warning (returning safe fallback):', err.message);
+    return res.json({
+      data: {
+        is_connected: false,
+        phone_number_id: null,
+        waba_id: null,
+        display_phone: null,
+        verified_name: null,
+        quality_rating: null,
+      },
+    });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 
