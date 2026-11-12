@@ -40,7 +40,8 @@ interface BroadcastHistory {
   total_recipients: number;
   sent_count: number;
   failed_count: number;
-  status: 'sent' | 'scheduled';
+  error_message?: string;
+  status: 'sent' | 'scheduled' | 'failed';
 }
 
 export default function PostsTemplatesPage() {
@@ -192,11 +193,32 @@ export default function PostsTemplatesPage() {
 
       {/* Connected Templates Grid */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wider flex items-center gap-2">
             <Smartphone size={16} className="text-whatsapp-teal" />
             Connected Meta Templates ({templates.length})
           </h2>
+          <button
+            onClick={() => {
+              const defaultTmpl: MetaTemplate = {
+                name: 'hello_world',
+                language: 'en_US',
+                category: 'MARKETING',
+                status: 'APPROVED',
+                body: 'Welcome and congratulations! This pre-approved Meta message confirms your WhatsApp Business Cloud API integration is live and working.',
+              };
+              const exists = templates.some((t) => t.name === 'hello_world');
+              if (!exists) {
+                handleSaveTemplates([...templates, defaultTmpl]);
+                showToast('Added pre-approved "hello_world" test template!');
+              } else {
+                showToast('"hello_world" template is already in your list.');
+              }
+            }}
+            className="text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition self-start sm:self-auto"
+          >
+            <Sparkles size={13} /> Add Pre-Approved "hello_world" Test Template
+          </button>
         </div>
 
         {templates.length === 0 ? (
@@ -221,9 +243,15 @@ export default function PostsTemplatesPage() {
                     <span className="font-mono font-bold text-xs text-gray-900 bg-gray-100 px-2 py-1 rounded">
                       {t.name}
                     </span>
-                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
-                      <Check size={11} /> {t.status || 'APPROVED'}
-                    </span>
+                    {t.status === 'APPROVED' ? (
+                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                        <Check size={11} /> APPROVED
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full flex items-center gap-1" title="Meta is still reviewing this template. Messages cannot be sent until approved.">
+                        <Clock size={11} /> PENDING IN META
+                      </span>
+                    )}
                   </div>
 
                   <div className="text-[10px] text-gray-500 flex items-center gap-3">
@@ -299,11 +327,16 @@ export default function PostsTemplatesPage() {
                     </span>
                     <span className="text-[10px] text-gray-400">{h.date}</span>
                   </div>
-                  <div className="text-xs text-gray-600 flex items-center gap-4">
+                  <div className="text-xs text-gray-600 flex flex-wrap items-center gap-3">
                     <span>Recipients: <strong>{h.total_recipients}</strong></span>
                     <span className="text-emerald-700">Sent: <strong>{h.sent_count}</strong></span>
                     {h.failed_count > 0 && (
                       <span className="text-red-600">Failed: <strong>{h.failed_count}</strong></span>
+                    )}
+                    {h.error_message && (
+                      <span className="text-[11px] text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded font-sans">
+                        Reason: {h.error_message}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -369,12 +402,17 @@ export default function PostsTemplatesPage() {
               total_recipients: summary.total,
               sent_count: summary.sent,
               failed_count: summary.failed,
-              status: 'sent',
+              error_message: summary.error,
+              status: summary.sent > 0 ? 'sent' : 'failed',
             };
             const updatedHistory = [newHistory, ...history];
             setHistory(updatedHistory);
             localStorage.setItem('reachflow-broadcast-history', JSON.stringify(updatedHistory));
-            showToast(`Broadcast completed: ${summary.sent} sent, ${summary.failed} failed.`);
+            if (summary.failed > 0 && summary.sent === 0) {
+              showToast(`Send failed: ${summary.error || 'Meta template not approved yet'}`, 'error');
+            } else {
+              showToast(`Broadcast completed: ${summary.sent} sent, ${summary.failed} failed.`);
+            }
           }}
         />
       )}
@@ -569,6 +607,15 @@ function TestSendModal({
           </button>
         </div>
 
+        {template.status !== 'APPROVED' && (
+          <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 text-xs flex items-center gap-2">
+            <Clock size={16} className="shrink-0 text-amber-600" />
+            <div>
+              <strong>Pending Meta Approval:</strong> Meta has not approved &ldquo;{template.name}&rdquo; yet. In WhatsApp Cloud API, sending is blocked until Meta changes status to APPROVED. You can use <strong>hello_world</strong> to test right now!
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-xs flex items-center gap-2">
             <AlertCircle size={16} className="shrink-0 text-red-500" />
@@ -630,7 +677,7 @@ function BroadcastModal({
   activeCount: number;
   customers: any[];
   onClose: () => void;
-  onDispatched: (summary: { total: number; sent: number; failed: number }) => void;
+  onDispatched: (summary: { total: number; sent: number; failed: number; error?: string }) => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -661,10 +708,12 @@ function BroadcastModal({
         token: metaCreds.token || undefined,
       });
 
+      const firstErr = res.data?.details?.find((d: any) => d.status === 'failed')?.error;
       onDispatched({
         total: res.data?.total || recipients.length,
         sent: res.data?.sent || 0,
         failed: res.data?.failed || 0,
+        error: firstErr,
       });
     } catch (err: any) {
       setError(err.message || 'Broadcast failed to dispatch');
@@ -685,6 +734,15 @@ function BroadcastModal({
             <X size={18} />
           </button>
         </div>
+
+        {template.status !== 'APPROVED' && (
+          <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 text-xs flex items-center gap-2">
+            <Clock size={16} className="shrink-0 text-amber-600" />
+            <div>
+              <strong>Pending Meta Approval:</strong> Meta has not approved &ldquo;{template.name}&rdquo; yet. In WhatsApp Cloud API, sending is blocked until Meta changes status to APPROVED. You can use <strong>hello_world</strong> to test right now!
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-xs flex items-center gap-2">
