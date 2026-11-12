@@ -48,14 +48,7 @@ export function TopBar() {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Daily Send Allowance Badge */}
-          <div className="hidden sm:flex items-center gap-2 bg-emerald-50 text-emerald-900 border border-emerald-200 px-3 py-1 rounded-full text-xs">
-            <Send size={12} className="text-emerald-700" />
-            <span className="font-medium">Daily Limit:</span>
-            <span className="font-bold">185 / 250 remaining</span>
-          </div>
-
-          <div className="flex items-center gap-2 text-sm text-gray-700 pl-2 border-l border-gray-200">
+          <div className="flex items-center gap-2 text-sm text-gray-700 pl-2">
             <div className="w-7 h-7 rounded-full bg-whatsapp-teal/10 text-whatsapp-teal flex items-center justify-center font-bold text-xs">
               <User size={14} />
             </div>
