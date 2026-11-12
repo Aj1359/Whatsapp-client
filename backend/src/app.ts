@@ -7,6 +7,7 @@ import webhooksRouter from './routes/webhooks.js';
 import internalRouter from './routes/internal.js';
 import contactsRouter from './routes/contacts.js';
 import templatesRouter from './routes/templates.js';
+import campaignsRouter from './routes/campaigns.js';
 import settingsRouter from './routes/settings.js';
 import repliesRouter from './routes/replies.js';
 
@@ -59,6 +60,7 @@ app.use('/webhooks', webhooksRouter);
 app.use('/internal', internalRouter);
 app.use('/api/contacts', contactsRouter);
 app.use('/api/templates', templatesRouter);
+app.use('/api/campaigns', campaignsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/replies', repliesRouter);
 
