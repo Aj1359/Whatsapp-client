@@ -63,6 +63,7 @@ export default function PostsTemplatesPage() {
   const [showConnectModal, setShowConnectModal] = useState(false);
   const [showTestModal, setShowTestModal] = useState(false);
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+  const [editImageTemplate, setEditImageTemplate] = useState<MetaTemplate | null>(null);
 
   // Loaders & feedback
   const [syncing, setSyncing] = useState(false);
@@ -101,7 +102,7 @@ export default function PostsTemplatesPage() {
           const bodyComp = (t.components || []).find((c: any) => c.type === 'BODY');
           if (bodyComp) bodyText = bodyComp.text || '';
           const hasHeader = (t.components || []).some((c: any) => c.type === 'HEADER');
-          const hasBodyVars = /\{\{\d+\}\}/.test(bodyText);
+          const existing = templates.find((cur) => cur.name === t.name);
           return {
             name: t.name,
             language: t.language || 'en',
@@ -109,7 +110,7 @@ export default function PostsTemplatesPage() {
             status: t.status || 'APPROVED',
             body: bodyText || `Meta template: ${t.name}`,
             header_type: hasHeader ? 'image' : 'none',
-            header_url: hasHeader ? 'https://images.unsplash.com/photo-1579208575657-c595a05383b7?w=800' : undefined,
+            header_url: existing?.header_url || (hasHeader ? 'https://images.unsplash.com/photo-1579208575657-c595a05383b7?w=800' : undefined),
           };
         });
 
@@ -279,16 +280,8 @@ export default function PostsTemplatesPage() {
                         )}
                         <button
                           type="button"
-                          onClick={() => {
-                            const newUrl = prompt('Enter custom Image URL for this template header:', t.header_url || '');
-                            if (newUrl !== null) {
-                              const updated = templates.map((tmpl) =>
-                                tmpl.name === t.name ? { ...tmpl, header_url: newUrl.trim() || undefined } : tmpl
-                              );
-                              handleSaveTemplates(updated);
-                            }
-                          }}
-                          className="absolute top-1 right-1 bg-black/70 hover:bg-black text-white text-[10px] px-2 py-0.5 rounded shadow transition"
+                          onClick={() => setEditImageTemplate(t)}
+                          className="absolute top-1 right-1 bg-black/75 hover:bg-black text-white text-[10px] px-2 py-0.5 rounded shadow transition font-semibold"
                         >
                           Change Picture
                         </button>
@@ -439,6 +432,25 @@ export default function PostsTemplatesPage() {
             } else {
               showToast(`Broadcast completed: ${summary.sent} sent, ${summary.failed} failed.`);
             }
+          }}
+        />
+      )}
+
+      {/* Edit Image Modal */}
+      {editImageTemplate && (
+        <EditImageModal
+          template={editImageTemplate}
+          onClose={() => setEditImageTemplate(null)}
+          onSaved={(newUrl) => {
+            const updated = templates.map((tmpl) =>
+              tmpl.name === editImageTemplate.name ? { ...tmpl, header_url: newUrl || undefined } : tmpl
+            );
+            handleSaveTemplates(updated);
+            if (selectedTemplate?.name === editImageTemplate.name) {
+              setSelectedTemplate({ ...selectedTemplate, header_url: newUrl || undefined });
+            }
+            setEditImageTemplate(null);
+            showToast(`Updated picture for template "${editImageTemplate.name}"!`);
           }}
         />
       )}
@@ -861,6 +873,125 @@ function BroadcastModal({
               className="btn-primary text-xs flex items-center gap-1.5"
             >
               {loading ? 'Broadcasting...' : `Send to ${activeCount} Customers`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Edit Image Modal ─────────────────────────────────────────────────────────
+function EditImageModal({
+  template,
+  onClose,
+  onSaved,
+}: {
+  template: MetaTemplate;
+  onClose: () => void;
+  onSaved: (url: string) => void;
+}) {
+  const [url, setUrl] = useState(template.header_url || '');
+  const [imgError, setImgError] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="card w-full max-w-md p-6 space-y-4 shadow-2xl">
+        <div className="flex items-center justify-between border-b pb-3">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Change Header Picture</h2>
+            <p className="text-[11px] text-gray-500 font-mono">Template: {template.name}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-3.5 text-xs">
+          <div>
+            <label className="label">Direct Image URL (.jpg, .png)</label>
+            <input
+              type="url"
+              className="input font-mono text-xs"
+              placeholder="https://example.com/banner.jpg"
+              value={url}
+              onChange={(e) => {
+                setUrl(e.target.value);
+                setImgError(false);
+                setImgLoaded(false);
+              }}
+            />
+            <p className="text-[10px] text-gray-400 mt-1">
+              Must be a direct, public link to an image file.
+            </p>
+          </div>
+
+          {/* Live Preview Box */}
+          <div className="border rounded-xl p-3 bg-gray-50 space-y-2">
+            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Live Preview</span>
+            {url ? (
+              <div className="space-y-2">
+                <img
+                  src={url}
+                  alt="Preview"
+                  className="w-full h-36 object-cover rounded-lg border bg-white"
+                  onLoad={() => {
+                    setImgLoaded(true);
+                    setImgError(false);
+                  }}
+                  onError={() => {
+                    setImgError(true);
+                    setImgLoaded(false);
+                  }}
+                />
+                {imgLoaded && (
+                  <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 p-2 rounded-lg flex items-center gap-1.5 font-semibold">
+                    <CheckCircle2 size={14} className="shrink-0" />
+                    Valid image verified! WhatsApp can display this file.
+                  </div>
+                )}
+                {imgError && (
+                  <div className="text-[11px] text-red-700 bg-red-50 border border-red-200 p-2 rounded-lg flex items-center gap-1.5">
+                    <AlertCircle size={14} className="shrink-0" />
+                    Cannot load image. Make sure the URL ends with .jpg or .png.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="h-28 border border-dashed rounded-lg flex flex-col items-center justify-center text-gray-400 gap-1">
+                <ImageIcon size={24} />
+                <span className="text-[11px]">Paste an image link above to preview your banner</span>
+              </div>
+            )}
+          </div>
+
+          <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-blue-900 text-[11px] space-y-1">
+            <div className="font-bold">Need a direct link for your image?</div>
+            <div>
+              Upload your image to free hosts like{' '}
+              <a href="https://imgbb.com" target="_blank" rel="noreferrer" className="underline font-bold">
+                ImgBB.com
+              </a>{' '}
+              or{' '}
+              <a href="https://postimages.org" target="_blank" rel="noreferrer" className="underline font-bold">
+                Postimages.org
+              </a>
+              , copy the <strong>Direct Link</strong> (ending in .jpg / .png), and paste it here!
+            </div>
+          </div>
+
+          <div className="pt-2 flex justify-end gap-2 border-t">
+            <button type="button" onClick={onClose} className="btn-secondary text-xs">
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => onSaved(url.trim())}
+              disabled={!url.trim() || imgError}
+              className="btn-primary text-xs flex items-center gap-1.5 disabled:opacity-50"
+            >
+              Save New Picture
             </button>
           </div>
         </div>
