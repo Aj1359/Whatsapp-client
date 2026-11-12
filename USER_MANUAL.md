@@ -1,250 +1,197 @@
-# ReachFlow — Operating Manual & Administrator Guide
-**WhatsApp Business Platform: Broadcasts, Seen/Not-Seen Audit, Customer Management & Inbound Follow-ups**
+# ReachFlow — User Manual & Operations Guide
+
+Welcome to **ReachFlow**, an enterprise-grade WhatsApp Cloud API broadcasting and customer engagement platform. This manual walks you through everything from connecting a business to launching campaigns, tracking real-time delivery ticks, handling customer replies, and setting up inquiry forwarding to your personal phone.
 
 ---
 
 ## Table of Contents
-1. [Overview & Architecture](#1-overview--architecture)
-2. [Account Setup & Sign In](#2-account-setup--sign-in)
-3. [Connecting Meta WhatsApp Business Cloud API](#3-connecting-meta-whatsapp-business-cloud-api)
-4. [Configuring Webhooks in Meta Developer Portal](#4-configuring-webhooks-in-meta-developer-portal)
-5. [Managing Customers Database](#5-managing-customers-database)
-6. [Creating & Repeating Day-Wise Posts (Broadcasts)](#6-creating--repeating-day-wise-posts-broadcasts)
-7. [Live Delivery Analytics & Seen (✓✓) vs. Not Seen Reports](#7-live-delivery-analytics--seen--vs-not-seen-reports)
-8. [Handling Customer Replies & Direct Chat Console](#8-handling-customer-replies--direct-chat-console)
-9. [Automated Keep-Alive Cron Setup](#9-automated-keep-alive-cron-setup)
+1. [Prerequisites in Meta (One-Time Setup)](#1-prerequisites-in-meta-one-time-setup)
+2. [Connecting a Client Business (Profile & Meta Connector)](#2-connecting-a-client-business-profile--meta-connector)
+3. [Managing Customers & Importing Contact Lists](#3-managing-customers--importing-contact-lists)
+4. [Syncing Approved Templates from Meta](#4-syncing-approved-templates-from-meta)
+5. [Launching a Broadcast Campaign](#5-launching-a-broadcast-campaign)
+6. [Monitoring Live Real-Time Delivery on the Dashboard](#6-monitoring-live-real-time-delivery-on-the-dashboard)
+7. [Managing Inbound Customer Replies & Follow-Ups](#7-managing-inbound-customer-replies--follow-ups)
+8. [Forwarding Inquiries to Your Personal WhatsApp](#8-forwarding-inquiries-to-your-personal-whatsapp)
+9. [Automated Daily Planner & Follow-up Sequences](#9-automated-daily-planner--follow-up-sequences)
 10. [Troubleshooting & Meta Error Codes](#10-troubleshooting--meta-error-codes)
 
 ---
 
-## 1. Overview & Architecture
+## 1. Prerequisites in Meta (One-Time Setup)
 
-**ReachFlow** is a Multi-Tenant WhatsApp Business Broadcast and customer engagement web platform. It enables businesses to:
-- Connect their official Meta WhatsApp Business Cloud API.
-- Upsert and import customer databases anytime using normalized **Mobile Number (E.164)** as the primary identifier.
-- Schedule and send daily broadcast posts with image and personalized text.
-- Audit real-time delivery receipts with a clear breakdown of **Who Has Seen (Blue Ticks ✓✓ with exact timestamp)** vs. **Who Has Not Seen Yet**.
-- Reply immediately to inbound responses directly from the console to either selected or all active customers.
-- Automatically respect opt-out (`STOP`) keywords per WhatsApp Business policies.
+Before connecting ReachFlow, complete these steps inside the client's [Meta Developers](https://developers.facebook.com) and [Meta Business Settings](https://business.facebook.com/settings) accounts:
 
-### Cloud Architecture
-```
-┌─────────────────────────────────┐
-│       ReachFlow Frontend        │  Static Web App (Vite + React)
-│    (Render Static Site)         │  Hosted at: https://wa-frontend.onrender.com
-└────────────────┬────────────────┘
-                 │ REST / Bearer JWT
-┌────────────────▼────────────────┐
-│       ReachFlow Backend         │  Node.js 22 + Express API
-│   (Render Web Service / Node)   │  Hosted at: https://wa-backend-ayta.onrender.com
-└────────┬───────────────┬────────┘
-         │               │
-         ▼               ▼
-┌─────────────────┐  ┌───────────────────────────────────┐
-│  Supabase Cloud │  │     Meta WhatsApp Cloud API       │
-│  Postgres + RLS │  │  graph.facebook.com/v21.0        │
-└─────────────────┘  └───────────────────────────────────┘
-```
-
----
-
-## 2. Account Setup & Sign In
-
-### Creating an Account
-1. Open the web app at your hosted domain.
-2. In the right card, click **Create Business Account**.
-3. Fill in:
-   - **Business / Brand Name**: Your legal business or brand name (e.g. *Apex Wholesalers & Retail*).
-   - **Email Address**: Your work email.
-   - **Password**: Secure password (at least 8 characters).
-4. Click **Create Business Account →**.
-5. Your account and organization are automatically provisioned in Supabase.
-
-### Signing In
-1. In the right card, select the **Sign In** tab.
-2. Enter your registered email address and password.
-3. Click **Sign In →**.
-
----
-
-## 3. Connecting Meta WhatsApp Business Cloud API
-
-Each tenant connects their own official WhatsApp Business number.
-
-### Where to Find Your Meta Credentials
-1. Go to **[developers.facebook.com](https://developers.facebook.com/)** and log in.
-2. Click **My Apps** (top right) $\rightarrow$ open your App (or click *Create App* $\rightarrow$ select *Other* $\rightarrow$ *Business*).
-3. In the left sidebar, expand **WhatsApp** $\rightarrow$ click **API Setup**:
-   - **Phone Number ID**: A 15-digit number (e.g. `102938475610293`).
-   - **WhatsApp Business Account (WABA) ID**: Found under *WhatsApp Business Account ID* (e.g. `109847192837465`).
-4. Generate a **Permanent System User Access Token**:
-   - Go to [business.facebook.com/settings](https://business.facebook.com/settings).
-   - Click **System Users** (under *Users*).
-   - Click **Add** to create a system user (role: *Admin*).
-   - Click **Generate New Token**, select your WhatsApp App, and grant these 2 permissions:
+1. **Meta Developer App**:
+   - Create a Business App.
+   - Set the App status to **Live** (Published).
+2. **WhatsApp Business Account (WABA)**:
+   - Add a valid payment method under **WhatsApp Manager &rarr; Billing** so conversation charges are authorized.
+3. **Generate a Permanent Access Token**:
+   - Go to [Meta Business Settings](https://business.facebook.com/settings) &rarr; **Users** &rarr; **System Users**.
+   - Create an Admin System User (e.g. `ReachFlowAdmin`).
+   - Click **Assign Assets**: Give Full Control over your **App** and **WhatsApp Account**.
+   - Click **Generate New Token**: Choose your App, set expiration to **Never**, and select:
      - `whatsapp_business_messaging`
      - `whatsapp_business_management`
-   - Set Token Expiration to **Never** (Permanent).
-   - Copy the generated token string (`EAAG...`).
-
-### Entering Credentials in ReachFlow
-1. In ReachFlow, navigate to **Profile & Meta Connector** (`/profile`).
-2. Enter:
-   - **Phone Number ID**: Paste your 15-digit ID.
-   - **WhatsApp Business Account ID (WABA ID)**: Paste your WABA ID.
-   - **Permanent Access Token**: Paste your `EAAG...` token.
-3. Click **Test Meta Connection**.
-4. When verified, a green badge will appear showing your verified business phone number, display name, and Meta quality rating (`GREEN`).
-5. Click **Save WhatsApp Configuration**. Credentials are encrypted using **AES-256-GCM** before being saved to the database.
+   - Copy and save this token.
+4. **Configure Webhook**:
+   - In Meta Developer Console under **WhatsApp &rarr; Configuration**:
+     - **Callback URL**: `https://<YOUR_BACKEND_URL>/webhooks/whatsapp`
+     - **Verify Token**: Your configured verify token.
+   - Under **Webhook fields**, click **Manage** and subscribe to:
+     - `messages`
+     - `message_template_status_update`
 
 ---
 
-## 4. Configuring Webhooks in Meta Developer Portal
+## 2. Connecting a Client Business (Profile & Meta Connector)
 
-Webhooks are required so your server receives real-time delivery receipts (`sent`, `delivered`, `read ✓✓`) and customer replies.
-
-1. In ReachFlow, open **Profile & Meta Connector** (`/profile`) and find the **Webhook Configuration** card.
-2. Note the two values:
-   - **Callback URL**: `https://wa-backend-ayta.onrender.com/webhooks/whatsapp`
-   - **Verify Token**: `wa_verify_token_123456`
-3. In your **Meta Developer Portal**:
-   - In the left sidebar, expand **WhatsApp** $\rightarrow$ click **Configuration**.
-   - Under **Webhook**, click **Edit**.
-   - Paste the **Callback URL** and **Verify Token** from above.
-   - Click **Verify and Save**.
-4. In the Webhook fields table, click **Manage** and subscribe to:
-   - **`messages`** (covers delivery receipts, read ticks, incoming text, and media).
-5. Click **Done**.
+1. Log into your ReachFlow portal.
+2. Click **Profile & Meta Connector** in the left sidebar.
+3. If previously connected to another client, click **Disconnect / Switch Client**.
+4. Enter the client's credentials:
+   - **WhatsApp Phone Number ID** (15–16 digit number from WhatsApp API Setup)
+   - **WhatsApp Business Account (WABA) ID** (from WhatsApp Manager)
+   - **Meta Permanent Access Token** (generated in Step 1)
+5. Click **Connect WhatsApp Business Profile**.
+6. ReachFlow will run an instant handshake with Meta Graph API, verify the phone name and quality rating, and store the token encrypted with AES-256-GCM.
 
 ---
 
-## 5. Managing Customers Database
+## 3. Managing Customers & Importing Contact Lists
 
-The customer database matches contacts by **Mobile Number (E.164 format)**.
+### Adding a Single Customer
+1. Navigate to **Customers Data** in the sidebar.
+2. Click **+ Add Customer**.
+3. Enter Name, Mobile Number (e.g., `+91 98765 43210` or `9876543210`), and optional Email.
+4. Check the mandatory **Opt-in Consent Confirmation** box.
+5. Click **Save Customer**.
 
-### Adding or Updating a Single Customer
-1. Navigate to **Customers Data** (`/customers`).
-2. Click **+ Add Customer** (top right).
-3. Fill in:
-   - **Primary Mobile Number**: e.g. `+919876543210` or `9876543210` (automatically normalized to E.164).
-   - **Customer Name**: Full name or company contact.
-   - **Email Address** *(optional)*.
-   - **Tags & Segment**: Comma-separated tags (e.g. `VIP, Wholesale, Mumbai`).
-4. Click **Save Customer**. If the number already exists, its details (name, email, tags) are updated seamlessly without creating duplicates.
-
-### Bulk Import via CSV or Excel (.xlsx)
-1. In **Customers Data**, click **Import CSV/Excel**.
-2. Prepare a spreadsheet with any of these standard headers:
-
-| Name | Mobile | Email | Tags | City |
-| :--- | :--- | :--- | :--- | :--- |
-| Ramesh Gupta | +91 98765 43210 | ramesh@gmail.com | VIP, Retail | Mumbai |
-| Priya Verma | 9820011223 | priya@outlook.com | New Lead | Delhi |
-| Amit Patel | +919930055443 | amit@patel.in | Wholesale | Ahmedabad |
-
-3. Drag & drop your `.csv` or `.xlsx` file into the upload box.
-4. Click **Upload & Process Import**.
-5. The importer normalizes every number, inserts new contacts, updates existing contacts, and shows a summary of rows processed.
+### Bulk Importing (.xlsx, .xls, .csv)
+1. In **Customers Data**, click **Upload / Import**.
+2. Drag and drop your `.xlsx` or `.csv` spreadsheet (up to 15 MB / 50,000 rows).
+3. The importer auto-detects column headers for `Name`, `Phone`, and `Email`.
+4. Check the **Consent Confirmation** checkbox confirming your contacts opted in to receive business WhatsApp notifications.
+5. Click **Import Contacts**.
+   - ReachFlow normalizes every phone number to standard E.164 (`+91...`).
+   - Duplicates within the file or existing database are skipped.
+   - Contacts who previously opted out (`STOP`) are preserved as opted-out and never reactivated.
 
 ---
 
-## 6. Creating & Repeating Day-Wise Posts (Broadcasts)
+## 4. Syncing Approved Templates from Meta
 
-### Composing a Day-Wise Post
-1. Navigate to **Posts & Templates** (`/posts`).
-2. Click **+ Create Post / Template**.
-3. Fill in:
-   - **Post / Campaign Title**: Internal reference (e.g. *Weekend Flash Discount Push*).
-   - **Image URL** *(optional)*: Public HTTPS link to product/promotional banner.
-   - **Message Text**: The message body. Supports personalization tags like `{{name}}`.
+> [!NOTE]
+> Per Meta policies, marketing and utility message templates must be authored and approved inside Meta WhatsApp Manager. ReachFlow automatically synchronizes them.
+
+1. Navigate to **Posts & Templates** in the sidebar.
+2. Click **Sync from Meta**.
+3. ReachFlow pulls all approved templates, their headers, body texts, footers, and dynamic variable placeholders (`{{1}}`, `{{2}}`).
+4. Only templates marked with the green **APPROVED** badge can be selected for broadcasts.
+
+---
+
+## 5. Launching a Broadcast Campaign
+
+1. In **Posts & Templates**, find the approved template you want to broadcast.
+2. Click **Broadcast**.
+3. Configure your campaign:
+   - **Campaign Name**: e.g., `Diwali Festival Sale 2026`
+   - **Audience**: Select an Audience List or target all active opt-in contacts.
+   - **Header Media (Optional)**: If the template has an image header, attach your image (`.jpg` / `.png`). ReachFlow uploads it once to Meta and distributes it efficiently.
+   - **Dynamic Variables**: Fill in variables (e.g., `{{1}}` automatically defaults to the recipient's first name).
+4. Click **Launch Broadcast**.
+5. The campaign is queued instantly in PostgreSQL. ReachFlow's background sending worker claims rows via `FOR UPDATE SKIP LOCKED` and sends messages with rate limiting and exponential backoff.
+
+---
+
+## 6. Monitoring Live Real-Time Delivery on the Dashboard
+
+Navigate to **Dashboard & Stats** to monitor real, verified database counts (zero simulated numbers):
+
+### 1. High-Level Metric Tiles
+- **Total Dispatched**: Total messages processed through Meta Cloud API.
+- **Verified Delivered**: Double-tick confirmations that reached customer handsets.
+- **Confirmed Seen (✓✓)**: Blue-tick confirmations where customer read receipts are active.
+- **Active Contacts**: Size of your selectable opt-in audience.
+
+### 2. Campaign Inspection Tabs
+Select any campaign from the horizontal list to inspect its 4 live status tabs:
+1. **Seen (Read)**: Recipients who opened and read the message.
+2. **Delivered, Not Seen**: Double-grey tick on the recipient's phone.
+3. **Sent, Not Delivered**: Single tick; message accepted by Meta and en route to the recipient.
+4. **Failed**: Messages rejected by Meta (e.g., invalid phone number or user opted out), showing the exact Meta error code.
+
+### 3. Campaign Controls
+- **Pause**: Temporarily pauses an ongoing campaign.
+- **Resume**: Continues sending from where it was paused.
+- **Cancel**: Cancels sending and marks remaining queued messages as skipped.
+- **Retry Failed**: Requeues failed messages that were blocked by temporary rate limits.
+
+---
+
+## 7. Managing Inbound Customer Replies & Follow-Ups
+
+1. Click **Replies** in the sidebar.
+2. The left pane shows customer conversations, sorted with the newest replies on top.
+3. Click any customer to open their full chronological chat history:
+   - Past broadcast templates sent to them.
+   - Inbound replies sent by the customer.
+   - Outbound 1-on-1 replies sent by your team.
+4. **Meta 24-Hour Customer Care Window**:
+   - When a customer replies, Meta opens a **free 24-hour service window** (indicated by a green badge).
+   - During these 24 hours, you can type free-form replies directly from the input bar at ₹0.00 charge.
+   - If 24 hours have passed, ReachFlow automatically disables free-form text and provides a **Send Template** shortcut to reopen the conversation safely.
+5. **Customer Opt-Out (STOP)**:
+   - If a customer replies with `STOP`, `UNSUBSCRIBE`, `CANCEL`, `END`, or `QUIT`, ReachFlow marks them as `opted_out` immediately and stops all future broadcast messages to that number for your organization.
+
+---
+
+## 8. Forwarding Inquiries to Your Personal WhatsApp
+
+Want to get notified on your own WhatsApp whenever a client's customer responds?
+
+1. Go to **Profile & Meta Connector** (or Settings).
+2. Under **Inquiry Auto-Forwarding**:
+   - Toggle **Enable WhatsApp Forwarding** to **ON**.
+   - Enter your **Personal WhatsApp Number** in international format (e.g. `+91 98765 43210`).
+   - Enter your approved Meta utility template name (e.g., `customer_inquiry_alert`).
+3. Click **Save Settings**.
+4. **How It Works**:
+   - Whenever an inbound reply arrives, ReachFlow dispatches an alert to your phone:
      ```text
-     Hi {{name}}! Flash weekend sale starts tonight at 8 PM.
-     Use code FLASH20 for flat 20% OFF.
-
-     Reply STOP to unsubscribe.
+     New WhatsApp inquiry from Rahul Sharma (+91 98310 XXXXX):
+     "Hi, I would like to place an order for the promo item."
      ```
-   - **Send Schedule**: Select **Send Immediately** or **Schedule for Later**.
-4. Click **Publish Broadcast Post**.
-
-### 1-Click "Repeat This Post"
-To re-send a successful promotional message from a previous day:
-1. In **Posts & Templates**, scroll through the **Broadcast History (Day by Day)**.
-2. On any past post card, click **Repeat This Post**.
-3. The composer opens pre-filled with the title, banner image, and message text.
-4. Make any tweaks if desired, and click **Publish Broadcast Post**.
+   - **Loop Guard**: If you message the business number from your personal phone, ReachFlow will never forward the message back to you.
+   - All messages remain fully viewable and answerable in the web portal regardless of forwarding.
 
 ---
 
-## 7. Live Delivery Analytics & Seen (✓✓) vs. Not Seen Reports
+## 9. Automated Daily Planner & Follow-Up Sequences
 
-The **Dashboard & Stats** (`/dashboard`) is dedicated entirely to open-rate audits.
+### Daily Planner
+- Plan campaigns days or weeks in advance.
+- The automated background scheduler (`/internal/tick`) converts scheduled entries into active broadcasts at their designated date and time.
+- If a planned entry is more than 2 hours overdue, it is automatically marked as `missed`.
 
-### Summary Metrics Cards
-- **Total Sent**: Total broadcast messages dispatched.
-- **Total Delivered**: Successfully delivered to recipients' handsets.
-- **Seen (Blue Ticks ✓✓)**: Confirmed opened and read by the customer, with percentage read rate.
-- **Not Seen Yet**: Delivered but not yet opened by the customer.
-
-### Filtering Recipients
-Under the drilldown table, toggle between:
-- **Who Has Seen It (✓✓)**: List of contacts who opened the message, complete with the **Exact Seen Timestamp** (e.g. `14:45 PM`).
-- **Who Has Not Seen It**: List of contacts who have not opened the message yet.
-- **All Targeted**: Complete recipient audit.
-
-### Exporting Reports
-Click **Export Seen List (CSV)** at the top right to download a spreadsheet with names, mobile numbers, delivery timestamps, and exact read timestamps.
-
----
-
-## 8. Handling Customer Replies & Direct Chat Console
-
-When a customer replies to your broadcast:
-1. Navigate to **Replies** (`/replies`).
-2. The inbound reply appears instantly showing:
-   - Customer Name and Phone Number.
-   - Exact message body.
-   - Received timestamp.
-   - Opt-out tag if the user replied `STOP`.
-
-### Sending a Direct Reply Right in the Console
-1. At the top of the **Replies** page, use the **Send Reply Directly Here** console.
-2. Select your target:
-   - **Reply to Selected**: Check the box next to specific customer replies.
-   - **Reply to All Active**: Send a broadcast response to all active repliers at once.
-3. Type your response in the reply text box.
-4. Click **Send WhatsApp Reply**.
-
-### STOP / Opt-Out Compliance
-If a customer replies with `STOP`, `UNSUBSCRIBE`, or `CANCEL`:
-- The system automatically marks their contact status as `opted_out`.
-- Future broadcasts automatically exclude this number.
-- The reply is flagged with a red **STOP / OPT-OUT** badge in the console.
-
----
-
-## 9. Automated Keep-Alive Cron Setup
-
-Render's free tier spins down backend services after 15 minutes of inactivity. To ensure 24/7 uptime and punctual broadcast delivery:
-
-1. Go to **[cron-job.org](https://cron-job.org)** (free service).
-2. Create a new cron job:
-   - **Title**: `ReachFlow Keep-Alive`
-   - **URL**: 
-     ```text
-     https://wa-backend-ayta.onrender.com/internal/tick?secret=wa_cron_secret_789012
-     ```
-   - **Execution Schedule**: **Every 5 minutes** (or Every 10 minutes).
-3. Click **Save / Create Job**.
+### Multi-Step Follow-Up Sequences
+- Set up conditional drip sequences:
+  - Step 1: Initial broadcast
+  - Step 2 (+24h): Follow-up if `no_reply` or `delivered_not_read`
+  - Step 3 (+48h): Final reminder
+- **Safety**: If a contact replies or opts out at any stage, they are automatically removed from the sequence immediately.
 
 ---
 
 ## 10. Troubleshooting & Meta Error Codes
 
-| Meta Error Code | Meaning | Solution |
-| :--- | :--- | :--- |
-| **`190`** | Access token expired or revoked | Regenerate a permanent system user token in Meta Business Manager and update it in `/profile`. |
-| **`131026`** | Number not registered on WhatsApp | The mobile number has no active WhatsApp account. Marked as invalid in customer database. |
-| **`131047`** | 24-hour customer service window closed | Outside the 24-hour window, you must send an approved Meta template message rather than free-form text. |
-| **`130429`** | Rate limit exceeded | Daily messaging tier reached (e.g. 250 or 1,000/day). Upgrade tier by sending quality broadcasts. |
-| **`100`** | Invalid parameter / phone number ID | Verify that the Phone Number ID in `/profile` belongs to the WhatsApp Business Account. |
-
+| Error Code | Meaning | What to Do |
+|---|---|---|
+| **190** | Access Token Expired or Invalid | Re-generate a permanent System User Token in Meta Business Settings and save it in ReachFlow. |
+| **130429** / **131056** | Rate Limit Hit | ReachFlow automatically backs off (30s, 2m, 10m, 30m) and retries. |
+| **131048** | Spam Rate Limit Reached | Meta has temporarily paused outbound marketing messages due to user reports. Campaign is paused automatically. |
+| **131026** | Undeliverable / Not on WhatsApp | The phone number is not registered on WhatsApp. |
+| **132000** | Template Does Not Exist | Click **Sync from Meta** in Templates to refresh template IDs. |
+| **WINDOW_CLOSED** | 24-Hour Customer Window Expired | Send an approved template instead of a free-form message. |
