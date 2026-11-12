@@ -339,8 +339,13 @@ router.post('/whatsapp/broadcast-template', async (req: Request, res: Response) 
   const details: any[] = [];
 
   for (const r of recipients) {
-    const cleanedTo = r.mobile.replace(/[^0-9]/g, '');
-    if (!cleanedTo || cleanedTo.length < 8) continue;
+    const rawMob = String(r.mobile || (r as any).whatsapp_e164 || (r as any).phone || '');
+    const cleanedTo = rawMob.replace(/[^0-9]/g, '');
+    if (!cleanedTo || cleanedTo.length < 8) {
+      failedCount++;
+      details.push({ mobile: rawMob, name: r.name, status: 'failed', error: `Invalid or missing mobile number: "${rawMob}"` });
+      continue;
+    }
 
     let components: any[] = [];
     if (customComponents && customComponents.length > 0) {

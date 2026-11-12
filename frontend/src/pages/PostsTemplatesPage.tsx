@@ -263,15 +263,38 @@ export default function PostsTemplatesPage() {
                   </div>
 
                   {/* Message Bubble Preview */}
-                  <div className="bg-[#ECE5DD] p-3 rounded-xl border border-gray-300 text-xs text-gray-800 leading-relaxed max-h-36 overflow-y-auto whitespace-pre-line shadow-inner">
-                    {t.header_url && (
-                      <img
-                        src={t.header_url}
-                        alt="Header"
-                        className="w-full h-20 object-cover rounded mb-2 border"
-                      />
+                  <div className="bg-[#ECE5DD] p-3 rounded-xl border border-gray-300 text-xs text-gray-800 leading-relaxed max-h-44 overflow-y-auto whitespace-pre-line shadow-inner space-y-2">
+                    {t.header_type === 'image' && (
+                      <div className="relative group">
+                        {t.header_url ? (
+                          <img
+                            src={t.header_url}
+                            alt="Header"
+                            className="w-full h-24 object-cover rounded border"
+                          />
+                        ) : (
+                          <div className="h-16 bg-gray-200 rounded flex items-center justify-center text-gray-500 text-[11px]">
+                            Image Header Template
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newUrl = prompt('Enter custom Image URL for this template header:', t.header_url || '');
+                            if (newUrl !== null) {
+                              const updated = templates.map((tmpl) =>
+                                tmpl.name === t.name ? { ...tmpl, header_url: newUrl.trim() || undefined } : tmpl
+                              );
+                              handleSaveTemplates(updated);
+                            }
+                          }}
+                          className="absolute top-1 right-1 bg-black/70 hover:bg-black text-white text-[10px] px-2 py-0.5 rounded shadow transition"
+                        >
+                          Change Picture
+                        </button>
+                      </div>
                     )}
-                    {t.body || `Hello {{1}}, here is your WhatsApp message from ${t.name}.`}
+                    <div>{t.body || `Hello {{1}}, here is your WhatsApp message from ${t.name}.`}</div>
                   </div>
                 </div>
 
@@ -693,31 +716,40 @@ function BroadcastModal({
   onDispatched: (summary: { total: number; sent: number; failed: number; error?: string }) => void;
 }) {
   const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [headerImageUrl, setHeaderImageUrl] = useState(template.header_url || '');
   const [error, setError] = useState<string | null>(null);
 
+  const validRecipients = customers
+    .map((c) => {
+      const mob = c.whatsapp_e164 || c.mobile_number || c.mobile || c.phone || c.phone_raw || '';
+      return {
+        mobile: mob,
+        name: c.name || c.display_name || 'Customer',
+      };
+    })
+    .filter((r) => r.mobile && r.mobile.replace(/[^0-9]/g, '').length >= 8);
+
   const handleStartBroadcast = async () => {
-    if (customers.length === 0) {
-      alert('No active customers found. Please add or import customers in Customers Data first.');
+    if (validRecipients.length === 0) {
+      alert(
+        'No valid customer phone numbers found. Please make sure customers in Customers Data have a valid mobile number with country code (e.g. +91 9876543210).'
+      );
       return;
     }
 
     setLoading(true);
     setError(null);
 
-    const recipients = customers.map((c) => ({
-      mobile: c.whatsapp_e164 || c.mobile_number,
-      name: c.name || c.display_name || 'Customer',
-    }));
-
     try {
       const metaCreds = JSON.parse(localStorage.getItem('reachflow-active-wa') || '{}');
       const hasBodyVar = /\{\{\d+\}\}/.test(template.body || '');
+      const finalHeader = headerImageUrl.trim() || template.header_url || (template.header_type === 'image' ? 'https://images.unsplash.com/photo-1579208575657-c595a05383b7?w=800' : undefined);
+
       const res = await api.settings.broadcastTemplate({
-        recipients,
+        recipients: validRecipients,
         template_name: template.name,
         language_code: template.language || 'en',
-        header_image_url: template.header_url || (template.header_type === 'image' ? 'https://images.unsplash.com/photo-1579208575657-c595a05383b7?w=800' : undefined),
+        header_image_url: finalHeader,
         has_body_variable: hasBodyVar,
         phone_number_id: metaCreds.phone_number_id || undefined,
         token: metaCreds.token || undefined,
@@ -725,7 +757,7 @@ function BroadcastModal({
 
       const firstErr = res.data?.details?.find((d: any) => d.status === 'failed')?.error;
       onDispatched({
-        total: res.data?.total || recipients.length,
+        total: res.data?.total || validRecipients.length,
         sent: res.data?.sent || 0,
         failed: res.data?.failed || 0,
         error: firstErr,
@@ -773,9 +805,45 @@ function BroadcastModal({
               <span>Target Audience:</span>
             </div>
             <span className="font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full">
-              {activeCount} Active Customers
+              {validRecipients.length} Valid Numbers
             </span>
           </div>
+
+          {/* Valid Recipients Preview */}
+          <div className="bg-gray-50 border p-2.5 rounded-lg text-xs space-y-1">
+            <div className="font-bold text-gray-700 flex items-center justify-between">
+              <span>Recipients:</span>
+              <span className="text-[10px] text-gray-500 font-normal">
+                {validRecipients.length} verified
+              </span>
+            </div>
+            {validRecipients.slice(0, 3).map((r, i) => (
+              <div key={i} className="text-gray-600 font-mono text-[11px] truncate">
+                • {r.mobile} ({r.name})
+              </div>
+            ))}
+            {validRecipients.length === 0 && (
+              <p className="text-red-600 text-[11px]">
+                No customer with a valid mobile number found. Go to Customers Data and add/check customer mobile numbers.
+              </p>
+            )}
+          </div>
+
+          {template.header_type === 'image' && (
+            <div>
+              <label className="label">Custom Header Image URL (Optional)</label>
+              <input
+                type="url"
+                className="input text-xs font-mono"
+                placeholder="https://your-domain.com/banner.jpg"
+                value={headerImageUrl}
+                onChange={(e) => setHeaderImageUrl(e.target.value)}
+              />
+              <p className="text-[10px] text-gray-400 mt-0.5">
+                Paste any image link you wish to attach to this template broadcast.
+              </p>
+            </div>
+          )}
 
           <div className="space-y-1 bg-gray-50 p-3 rounded-lg border text-gray-600 text-[11px]">
             <div>• Each customer receives an individual message using Meta Cloud API.</div>
