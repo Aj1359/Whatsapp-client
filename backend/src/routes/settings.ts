@@ -136,6 +136,7 @@ router.put('/whatsapp', async (req: Request, res: Response) => {
       verified_name: verifiedName,
       quality_rating: qualityRating,
       token_encrypted: tokenEncrypted,
+      token_plain: token,
       updated_at: new Date().toISOString(),
     };
     inMemoryAccounts[orgId] = savedAccount;
@@ -230,6 +231,147 @@ router.post('/whatsapp/test', async (req: Request, res: Response) => {
       },
     });
   }
+});
+
+// ── GET /api/settings/whatsapp/templates (List Meta Message Templates) ────────
+router.get('/whatsapp/templates', async (req: Request, res: Response) => {
+  const orgId = getOrgId(req);
+  const wabaIdQuery = req.query.waba_id as string;
+  const tokenQuery = req.query.token as string;
+
+  const acc = inMemoryAccounts[orgId] || inMemoryAccounts['default'] || {};
+  const wabaId = wabaIdQuery || acc.waba_id;
+  const token = tokenQuery || acc.token_plain || (acc.token_encrypted ? decryptToken(acc.token_encrypted, ENCRYPTION_KEY) : null);
+
+  if (!wabaId || !token) {
+    return res.status(400).json({ error: { message: 'Missing WABA ID or Access Token. Please configure in Profile Connector.' } });
+  }
+
+  try {
+    const waClient = new WhatsAppClient();
+    const templates = await waClient.listTemplates(wabaId, token);
+    return res.json({ data: templates });
+  } catch (err: any) {
+    return res.status(400).json({ error: { message: err.message || 'Failed to list templates from Meta' } });
+  }
+});
+
+// ── POST /api/settings/whatsapp/send-template (Single template test / message) ─
+const sendTemplateSchema = z.object({
+  to: z.string().min(8),
+  template_name: z.string().min(1),
+  language_code: z.string().default('en'),
+  components: z.array(z.any()).optional().default([]),
+  phone_number_id: z.string().optional(),
+  token: z.string().optional(),
+});
+
+router.post('/whatsapp/send-template', async (req: Request, res: Response) => {
+  const parsed = sendTemplateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: { code: 'INVALID_INPUT', issues: parsed.error.issues } });
+  }
+
+  const { to, template_name, language_code, components, phone_number_id: bodyPhoneId, token: bodyToken } = parsed.data;
+  const orgId = getOrgId(req);
+  const acc = inMemoryAccounts[orgId] || inMemoryAccounts['default'] || {};
+  const phoneId = bodyPhoneId || acc.phone_number_id;
+  const token = bodyToken || acc.token_plain || (acc.token_encrypted ? decryptToken(acc.token_encrypted, ENCRYPTION_KEY) : null);
+
+  if (!phoneId || !token) {
+    return res.status(400).json({ error: { message: 'Missing Phone Number ID or Access Token.' } });
+  }
+
+  const waClient = new WhatsAppClient();
+  const cleanedTo = to.replace(/[^0-9]/g, '');
+  const result = await waClient.sendTemplate(phoneId, token, cleanedTo, template_name, language_code, components);
+
+  if (!result.success) {
+    return res.status(400).json({ error: result.error || { message: 'Failed to send template message' } });
+  }
+
+  return res.json({ data: result });
+});
+
+// ── POST /api/settings/whatsapp/broadcast-template (Send template to contacts) ─
+const broadcastTemplateSchema = z.object({
+  recipients: z.array(z.object({
+    mobile: z.string(),
+    name: z.string().optional(),
+  })),
+  template_name: z.string().min(1),
+  language_code: z.string().default('en'),
+  header_image_url: z.string().optional(),
+  phone_number_id: z.string().optional(),
+  token: z.string().optional(),
+});
+
+router.post('/whatsapp/broadcast-template', async (req: Request, res: Response) => {
+  const parsed = broadcastTemplateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: { code: 'INVALID_INPUT', issues: parsed.error.issues } });
+  }
+
+  const { recipients, template_name, language_code, header_image_url, phone_number_id: bodyPhoneId, token: bodyToken } = parsed.data;
+  const orgId = getOrgId(req);
+  const acc = inMemoryAccounts[orgId] || inMemoryAccounts['default'] || {};
+  const phoneId = bodyPhoneId || acc.phone_number_id;
+  const token = bodyToken || acc.token_plain || (acc.token_encrypted ? decryptToken(acc.token_encrypted, ENCRYPTION_KEY) : null);
+
+  if (!phoneId || !token) {
+    return res.status(400).json({ error: { message: 'Missing Phone Number ID or Access Token.' } });
+  }
+
+  const waClient = new WhatsAppClient();
+  let sentCount = 0;
+  let failedCount = 0;
+  const details: any[] = [];
+
+  for (const r of recipients) {
+    const cleanedTo = r.mobile.replace(/[^0-9]/g, '');
+    if (!cleanedTo || cleanedTo.length < 8) continue;
+
+    const components: any[] = [];
+    if (header_image_url) {
+      components.push({
+        type: 'header',
+        parameters: [{ type: 'image', image: { link: header_image_url } }],
+      });
+    }
+    if (r.name) {
+      components.push({
+        type: 'body',
+        parameters: [{ type: 'text', text: r.name }],
+      });
+    }
+
+    try {
+      const resSend = await waClient.sendTemplate(phoneId, token, cleanedTo, template_name, language_code, components);
+      if (resSend.success) {
+        sentCount++;
+        details.push({ mobile: cleanedTo, name: r.name, status: 'sent', messageId: resSend.wa_message_id });
+      } else {
+        failedCount++;
+        details.push({ mobile: cleanedTo, name: r.name, status: 'failed', error: resSend.error?.message });
+      }
+    } catch (sendErr: any) {
+      failedCount++;
+      details.push({ mobile: cleanedTo, name: r.name, status: 'failed', error: sendErr.message });
+    }
+
+    // Small delay between calls to respect rate limit
+    await new Promise((resolve) => setTimeout(resolve, 80));
+  }
+
+  return res.json({
+    data: {
+      total: recipients.length,
+      sent: sentCount,
+      failed: failedCount,
+      template_name,
+      details,
+    },
+  });
 });
 
 export default router;

@@ -36,6 +36,28 @@ function saveLocalContacts(contacts: any[]) {
   } catch {}
 }
 
+export function loadLocalTemplates(): any[] {
+  try {
+    const raw = localStorage.getItem('reachflow-templates');
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [
+    {
+      name: 'hello_world',
+      language: 'en_US',
+      category: 'MARKETING',
+      status: 'APPROVED',
+      body: 'Welcome to ReachFlow! This is an official WhatsApp template message.',
+    },
+  ];
+}
+
+export function saveLocalTemplates(templates: any[]) {
+  try {
+    localStorage.setItem('reachflow-templates', JSON.stringify(templates));
+  } catch {}
+}
+
 // In-memory initial data store (backed by localStorage for contacts)
 export const mockData: any = {
   dashboard: {
@@ -344,6 +366,59 @@ export const api = {
       const json = await res.json();
       if (!res.ok) {
         throw new Error(json.error?.message || 'Meta test connection failed');
+      }
+      return json.data ?? json;
+    },
+    listTemplates: async (params?: { waba_id?: string; token?: string }) => {
+      const qs = new URLSearchParams();
+      if (params?.waba_id) qs.set('waba_id', params.waba_id);
+      if (params?.token) qs.set('token', params.token);
+      const res = await fetch(`${API_BASE}/api/settings/whatsapp/templates?${qs.toString()}`, {
+        method: 'GET',
+        headers: getHeaders(),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error?.message || 'Failed to list templates from Meta');
+      }
+      const json = await res.json();
+      return json.data ?? [];
+    },
+    sendTemplate: async (data: {
+      to: string;
+      template_name: string;
+      language_code?: string;
+      components?: any[];
+      phone_number_id?: string;
+      token?: string;
+    }) => {
+      const res = await fetch(`${API_BASE}/api/settings/whatsapp/send-template`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error?.message || 'Failed to send template message');
+      }
+      return json.data ?? json;
+    },
+    broadcastTemplate: async (data: {
+      recipients: Array<{ mobile: string; name?: string }>;
+      template_name: string;
+      language_code?: string;
+      header_image_url?: string;
+      phone_number_id?: string;
+      token?: string;
+    }) => {
+      const res = await fetch(`${API_BASE}/api/settings/whatsapp/broadcast-template`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error?.message || 'Broadcast failed');
       }
       return json.data ?? json;
     },

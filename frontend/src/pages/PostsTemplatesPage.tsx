@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { api, loadLocalTemplates, saveLocalTemplates } from '../lib/api';
 import {
   Send,
   Plus,
@@ -12,171 +13,368 @@ import {
   Sparkles,
   ArrowRight,
   X,
+  RefreshCw,
+  Smartphone,
+  Check,
+  AlertCircle,
+  Users,
+  Play,
 } from 'lucide-react';
 
-interface DayPost {
-  id: number;
-  day: string;
+interface MetaTemplate {
+  name: string;
+  language: string;
+  category?: string;
+  status?: string;
+  body?: string;
+  header_type?: 'none' | 'image' | 'text';
+  header_url?: string;
+  id?: string;
+}
+
+interface BroadcastHistory {
+  id: string;
   date: string;
   title: string;
-  messageText: string;
-  imageUrl?: string;
-  sentCount: number;
-  seenCount: number;
+  template_name: string;
+  total_recipients: number;
+  sent_count: number;
+  failed_count: number;
   status: 'sent' | 'scheduled';
 }
 
 export default function PostsTemplatesPage() {
   const navigate = useNavigate();
 
-  // Day-wise history of posts/messages
-  const [posts, setPosts] = useState<DayPost[]>([]);
+  const [templates, setTemplates] = useState<MetaTemplate[]>(loadLocalTemplates());
+  const [history, setHistory] = useState<BroadcastHistory[]>(() => {
+    try {
+      const raw = localStorage.getItem('reachflow-broadcast-history');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return [];
+  });
 
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [repeatPostData, setRepeatPostData] = useState<DayPost | null>(null);
+  const [activeCustomers, setActiveCustomers] = useState<any[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<MetaTemplate | null>(null);
 
-  const handleRepeatPost = (post: DayPost) => {
-    setRepeatPostData(post);
-    setShowCreateModal(true);
+  // Modals
+  const [showConnectModal, setShowConnectModal] = useState(false);
+  const [showTestModal, setShowTestModal] = useState(false);
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+
+  // Loaders & feedback
+  const [syncing, setSyncing] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; type?: 'success' | 'error' } | null>(null);
+
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  useEffect(() => {
+    // Load active contacts for broadcast targeting
+    api.contacts.list({ status: 'active' }).then((res: any) => {
+      const list = res.contacts ?? res ?? [];
+      setActiveCustomers(list);
+    });
+  }, []);
+
+  const handleSaveTemplates = (newTemplates: MetaTemplate[]) => {
+    setTemplates(newTemplates);
+    saveLocalTemplates(newTemplates);
+  };
+
+  const handleSyncFromMeta = async () => {
+    setSyncing(true);
+    try {
+      const metaCreds = JSON.parse(localStorage.getItem('reachflow-active-wa') || '{}');
+      const remoteList = await api.settings.listTemplates({
+        waba_id: metaCreds.waba_id || '1360714332762492',
+        token: metaCreds.token || undefined,
+      });
+
+      if (Array.isArray(remoteList) && remoteList.length > 0) {
+        const formatted: MetaTemplate[] = remoteList.map((t: any) => {
+          let bodyText = '';
+          const bodyComp = (t.components || []).find((c: any) => c.type === 'BODY');
+          if (bodyComp) bodyText = bodyComp.text || '';
+          return {
+            name: t.name,
+            language: t.language || 'en',
+            category: t.category || 'MARKETING',
+            status: t.status || 'APPROVED',
+            body: bodyText || `Meta template: ${t.name}`,
+            header_type: (t.components || []).some((c: any) => c.type === 'HEADER') ? 'image' : 'none',
+          };
+        });
+
+        handleSaveTemplates(formatted);
+        showToast(`Synced ${formatted.length} templates directly from Meta!`);
+      } else {
+        showToast('No templates returned from Meta. You can connect your template by name below.', 'error');
+      }
+    } catch (err: any) {
+      showToast(`Meta Sync: ${err.message}. You can connect your template by name below.`, 'error');
+    } finally {
+      setSyncing(false);
+    }
   };
 
   return (
-    <div className="p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="p-8 space-y-8 max-w-7xl mx-auto">
+      {/* Toast Alert */}
+      {toast && (
+        <div
+          className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-xl shadow-2xl text-xs flex items-center gap-2 border animate-in fade-in ${
+            toast.type === 'error'
+              ? 'bg-red-950 text-red-100 border-red-500'
+              : 'bg-gray-900 text-white border-emerald-500'
+          }`}
+        >
+          {toast.type === 'error' ? (
+            <AlertCircle size={16} className="text-red-400" />
+          ) : (
+            <CheckCircle2 size={16} className="text-emerald-400" />
+          )}
+          <span>{toast.msg}</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-gray-900 tracking-tight">
-            Day-Wise Posts & Message Templates
+            WhatsApp Posts & Meta Templates
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            Create message + picture posts, view day-by-day sending history, and repeat past broadcasts with 1 click.
+            Connect approved Meta templates using their Template Name, test individual sends, and broadcast to your customer base.
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            setRepeatPostData(null);
-            setShowCreateModal(true);
-          }}
-          className="btn-primary text-xs px-4 py-2 flex items-center gap-1.5 shadow-sm"
-        >
-          <Plus size={14} /> Create New Post
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleSyncFromMeta}
+            disabled={syncing}
+            className="btn-secondary text-xs px-3.5 py-2 flex items-center gap-1.5"
+          >
+            <RefreshCw size={13} className={syncing ? 'animate-spin' : ''} />
+            {syncing ? 'Syncing...' : 'Sync from Meta WABA'}
+          </button>
+          <button
+            onClick={() => setShowConnectModal(true)}
+            className="btn-primary text-xs px-4 py-2 flex items-center gap-1.5 shadow-sm"
+          >
+            <Plus size={14} /> Connect Meta Template
+          </button>
+        </div>
       </div>
 
-      {/* Day-Wise History Cards List */}
+      {/* Meta Template Banner Info */}
+      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+            <Sparkles size={20} />
+          </div>
+          <div>
+            <h3 className="text-xs font-bold text-emerald-950">
+              Create Templates in Meta &rarr; Connect Using Template Name in ReachFlow
+            </h3>
+            <p className="text-[11px] text-emerald-800">
+              Once you create and submit a template in <strong>Meta WhatsApp Manager</strong>, enter its approved <strong>Template Name</strong> (e.g. <code>summer_offer</code>) here. ReachFlow will dispatch it automatically to each customer via WhatsApp Cloud API.
+            </p>
+          </div>
+        </div>
+        <div className="hidden lg:flex items-center gap-2 text-xs font-bold text-emerald-900 shrink-0">
+          <span>Active Customers Ready: {activeCustomers.length}</span>
+        </div>
+      </div>
+
+      {/* Connected Templates Grid */}
       <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wider flex items-center gap-2">
+            <Smartphone size={16} className="text-whatsapp-teal" />
+            Connected Meta Templates ({templates.length})
+          </h2>
+        </div>
+
+        {templates.length === 0 ? (
+          <div className="card p-10 text-center border-dashed border-2 border-gray-200 space-y-3">
+            <p className="text-xs text-gray-500">No Meta templates connected yet.</p>
+            <button
+              onClick={() => setShowConnectModal(true)}
+              className="btn-primary text-xs px-4 py-2"
+            >
+              + Connect Your Approved Meta Template
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {templates.map((t, idx) => (
+              <div
+                key={t.name + idx}
+                className="card p-5 hover:border-emerald-500/50 transition shadow-sm space-y-4 flex flex-col justify-between"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-bold text-xs text-gray-900 bg-gray-100 px-2 py-1 rounded">
+                      {t.name}
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <Check size={11} /> {t.status || 'APPROVED'}
+                    </span>
+                  </div>
+
+                  <div className="text-[10px] text-gray-500 flex items-center gap-3">
+                    <span>Language: <strong className="font-mono text-gray-700">{t.language}</strong></span>
+                    <span>Category: <strong className="text-gray-700">{t.category || 'MARKETING'}</strong></span>
+                  </div>
+
+                  {/* Message Bubble Preview */}
+                  <div className="bg-[#ECE5DD] p-3 rounded-xl border border-gray-300 text-xs text-gray-800 leading-relaxed max-h-36 overflow-y-auto whitespace-pre-line shadow-inner">
+                    {t.header_url && (
+                      <img
+                        src={t.header_url}
+                        alt="Header"
+                        className="w-full h-20 object-cover rounded mb-2 border"
+                      />
+                    )}
+                    {t.body || `Hello {{1}}, here is your WhatsApp message from ${t.name}.`}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="pt-3 border-t flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedTemplate(t);
+                      setShowTestModal(true);
+                    }}
+                    className="btn-secondary text-xs px-3 py-1.5 flex-1 text-center"
+                    title="Send a live test to 1 WhatsApp number"
+                  >
+                    Test Send (1)
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedTemplate(t);
+                      setShowBroadcastModal(true);
+                    }}
+                    className="btn-primary text-xs px-3 py-1.5 flex-1 flex items-center justify-center gap-1"
+                    title="Broadcast to active customer database"
+                  >
+                    <Send size={12} /> Broadcast
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Broadcast History */}
+      <div className="space-y-4 pt-4 border-t">
         <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wider flex items-center gap-2">
           <Calendar size={16} className="text-whatsapp-teal" />
           Broadcast History (Day by Day)
         </h2>
 
-        {posts.length === 0 ? (
-          <div className="card p-12 text-center border-dashed border-2 border-gray-200 bg-white space-y-4">
-            <div className="w-16 h-16 rounded-full bg-emerald-50 text-whatsapp-teal flex items-center justify-center mx-auto">
-              <Calendar size={28} />
-            </div>
-            <div className="max-w-md mx-auto space-y-1">
-              <h2 className="text-base font-bold text-gray-900">No Posts or Templates Created Yet</h2>
-              <p className="text-xs text-gray-500">
-                Create your first day-wise post with custom message and image, or reuse saved broadcast templates.
-              </p>
-            </div>
-            <div className="pt-2">
-              <button
-                onClick={() => {
-                  setRepeatPostData(null);
-                  setShowCreateModal(true);
-                }}
-                className="btn-primary py-2.5 px-5 text-xs font-bold inline-flex items-center gap-2 shadow"
-              >
-                <Plus size={14} /> Create First Post
-              </button>
-            </div>
+        {history.length === 0 ? (
+          <div className="card p-8 text-center text-gray-400 text-xs">
+            No broadcast history yet. Run a template test or dispatch to customers to see delivery logs here.
           </div>
         ) : (
-          posts.map((post) => (
-          <div
-            key={post.id}
-            className="card p-5 hover:border-whatsapp-teal/40 transition shadow-sm space-y-4 bg-white"
-          >
-            {/* Post Day & Title bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
-              <div className="flex items-center gap-3">
-                <span className="bg-emerald-100 text-emerald-900 text-xs font-bold px-2.5 py-1 rounded-lg">
-                  {post.day}, {post.date}
-                </span>
-                <h3 className="font-bold text-sm text-gray-900">{post.title}</h3>
-              </div>
+          <div className="space-y-3">
+            {history.map((h) => (
+              <div
+                key={h.id}
+                className="card p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm hover:border-gray-300 transition"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-900">{h.title}</span>
+                    <span className="font-mono text-[10px] bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
+                      Template: {h.template_name}
+                    </span>
+                    <span className="text-[10px] text-gray-400">{h.date}</span>
+                  </div>
+                  <div className="text-xs text-gray-600 flex items-center gap-4">
+                    <span>Recipients: <strong>{h.total_recipients}</strong></span>
+                    <span className="text-emerald-700">Sent: <strong>{h.sent_count}</strong></span>
+                    {h.failed_count > 0 && (
+                      <span className="text-red-600">Failed: <strong>{h.failed_count}</strong></span>
+                    )}
+                  </div>
+                </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleRepeatPost(post)}
-                  className="btn-primary text-xs px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 flex items-center gap-1.5"
-                  title="Pre-fill and re-send this post today"
+                  onClick={() => {
+                    const tmpl = templates.find((t) => t.name === h.template_name) || {
+                      name: h.template_name,
+                      language: 'en',
+                    };
+                    setSelectedTemplate(tmpl);
+                    setShowBroadcastModal(true);
+                  }}
+                  className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1"
                 >
-                  <Repeat size={13} /> Repeat This Post
-                </button>
-                <button
-                  onClick={() => navigate('/dashboard')}
-                  className="btn-secondary text-xs px-3 py-1.5 text-gray-700"
-                >
-                  View Stats →
+                  <Repeat size={12} /> Repeat Broadcast
                 </button>
               </div>
-            </div>
-
-            {/* Post Content Preview & Seen Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
-              {/* Image Preview if present */}
-              {post.imageUrl && (
-                <div className="md:col-span-3">
-                  <img
-                    src={post.imageUrl}
-                    alt={post.title}
-                    className="w-full h-32 object-cover rounded-xl border border-gray-200 shadow-inner"
-                  />
-                </div>
-              )}
-
-              {/* Message text */}
-              <div className={post.imageUrl ? 'md:col-span-6' : 'md:col-span-9'}>
-                <div className="bg-[#ECE5DD] p-3.5 rounded-xl border border-gray-300/80 text-xs font-medium text-gray-800 whitespace-pre-line leading-relaxed max-w-lg shadow-sm">
-                  {post.messageText}
-                </div>
-              </div>
-
-              {/* Seen vs Unseen mini badge */}
-              <div className="md:col-span-3 bg-gray-50 p-3 rounded-xl border border-gray-100 space-y-1.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Sent:</span>
-                  <strong>{post.sentCount}</strong>
-                </div>
-                <div className="flex justify-between text-emerald-800 font-bold">
-                  <span className="flex items-center gap-1">
-                    <Eye size={12} className="text-emerald-600" /> Seen:
-                  </span>
-                  <span>{post.seenCount} ({((post.seenCount / post.sentCount) * 100).toFixed(1)}%)</span>
-                </div>
-                <div className="flex justify-between text-amber-800 font-semibold">
-                  <span>Unseen:</span>
-                  <span>{post.sentCount - post.seenCount}</span>
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
-        )))}
+        )}
       </div>
 
-      {/* Create / Repeat Post Modal */}
-      {showCreateModal && (
-        <CreateOrRepeatModal
-          initialPost={repeatPostData}
-          onClose={() => setShowCreateModal(false)}
-          onPublished={(newPost) => {
-            setShowCreateModal(false);
-            setPosts([newPost, ...posts]);
+      {/* Connect Template Modal */}
+      {showConnectModal && (
+        <ConnectTemplateModal
+          onClose={() => setShowConnectModal(false)}
+          onConnected={(newTmpl) => {
+            setShowConnectModal(false);
+            const updated = [newTmpl, ...templates.filter((t) => t.name !== newTmpl.name)];
+            handleSaveTemplates(updated);
+            showToast(`Connected Meta template "${newTmpl.name}"!`);
+          }}
+        />
+      )}
+
+      {/* Test Send Modal (1 Recipient) */}
+      {showTestModal && selectedTemplate && (
+        <TestSendModal
+          template={selectedTemplate}
+          onClose={() => setShowTestModal(false)}
+          onSent={(res) => {
+            setShowTestModal(false);
+            showToast(`Test message sent successfully! WA ID: ${res.wa_message_id || 'OK'}`);
+          }}
+        />
+      )}
+
+      {/* Bulk Broadcast Modal (Active Customers) */}
+      {showBroadcastModal && selectedTemplate && (
+        <BroadcastModal
+          template={selectedTemplate}
+          activeCount={activeCustomers.length}
+          customers={activeCustomers}
+          onClose={() => setShowBroadcastModal(false)}
+          onDispatched={(summary) => {
+            setShowBroadcastModal(false);
+            const newHistory: BroadcastHistory = {
+              id: Date.now().toString(),
+              date: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+              title: `Broadcast: ${selectedTemplate.name}`,
+              template_name: selectedTemplate.name,
+              total_recipients: summary.total,
+              sent_count: summary.sent,
+              failed_count: summary.failed,
+              status: 'sent',
+            };
+            const updatedHistory = [newHistory, ...history];
+            setHistory(updatedHistory);
+            localStorage.setItem('reachflow-broadcast-history', JSON.stringify(updatedHistory));
+            showToast(`Broadcast completed: ${summary.sent} sent, ${summary.failed} failed.`);
           }}
         />
       )}
@@ -184,131 +382,117 @@ export default function PostsTemplatesPage() {
   );
 }
 
-function CreateOrRepeatModal({
-  initialPost,
+// ── Connect Template Modal ───────────────────────────────────────────────────
+function ConnectTemplateModal({
   onClose,
-  onPublished,
+  onConnected,
 }: {
-  initialPost: DayPost | null;
   onClose: () => void;
-  onPublished: (p: DayPost) => void;
+  onConnected: (t: MetaTemplate) => void;
 }) {
-  const [title, setTitle] = useState(initialPost ? `Repeat: ${initialPost.title}` : '');
-  const [messageText, setMessageText] = useState(
-    initialPost?.messageText || 'Hi {{name}}, today’s exclusive offer: 20% off! Reply STOP to opt out.'
-  );
-  const [imageUrl, setImageUrl] = useState(initialPost?.imageUrl || '');
-  const [sendOption, setSendOption] = useState<'now' | 'scheduled'>('now');
+  const [name, setName] = useState('');
+  const [language, setLanguage] = useState('en');
+  const [category, setCategory] = useState('MARKETING');
+  const [bodyText, setBodyText] = useState('Hello {{1}}, check out our latest offers today!');
+  const [headerUrl, setHeaderUrl] = useState('');
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const newPost: DayPost = {
-      id: Date.now(),
-      day: 'Today',
-      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      title,
-      messageText,
-      imageUrl: imageUrl.trim() || undefined,
-      sentCount: 10,
-      seenCount: 0,
-      status: 'sent',
-    };
-    onPublished(newPost);
+    if (!name.trim()) return;
+
+    const cleanedName = name.trim().toLowerCase().replace(/\s+/g, '_');
+    onConnected({
+      name: cleanedName,
+      language: language.trim(),
+      category,
+      body: bodyText.trim(),
+      header_url: headerUrl.trim() || undefined,
+      status: 'APPROVED',
+    });
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="card w-full max-w-xl p-6 space-y-4 shadow-2xl my-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="card w-full max-w-md p-6 space-y-4 shadow-2xl">
         <div className="flex items-center justify-between border-b pb-3">
           <div>
-            <h2 className="text-base font-bold text-gray-900">
-              {initialPost ? 'Repeat Post / Broadcast' : 'Create New Message Post'}
-            </h2>
-            <p className="text-[11px] text-gray-500">
-              {initialPost
-                ? 'Pre-filled with past broadcast content. Modify or repeat instantly.'
-                : 'Send message with optional photo banner to your customer database.'}
-            </p>
+            <h2 className="text-base font-bold text-gray-900">Connect Meta Template</h2>
+            <p className="text-[11px] text-gray-500">Link your approved template from Meta WhatsApp Manager</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSend} className="space-y-4 text-xs">
+        <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
           <div>
-            <label className="label">Campaign / Post Title *</label>
+            <label className="label">Template Name (as created in Meta) *</label>
             <input
               type="text"
-              className="input font-semibold"
-              placeholder="e.g. Wednesday Special Promo"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              className="input font-mono font-bold"
+              placeholder="e.g. summer_offer or client_promo"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               required
             />
+            <p className="text-[10px] text-gray-400 mt-1">
+              Must match the exact template name approved in your Meta WhatsApp Manager.
+            </p>
           </div>
 
-          <div>
-            <label className="label">Message Text (Supports variables like &#123;&#123;name&#125;&#125;) *</label>
-            <textarea
-              className="input font-medium text-xs h-28 resize-none"
-              value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
-              required
-            />
-          </div>
-
-          <div>
-            <label className="label">Post Image URL (Optional Header Picture)</label>
-            <div className="flex gap-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Language Code *</label>
               <input
-                type="url"
-                className="input"
-                placeholder="https://example.com/promo-banner.jpg"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
+                type="text"
+                className="input font-mono"
+                placeholder="e.g. en, en_US, hi"
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                required
               />
             </div>
-            {imageUrl && (
-              <img
-                src={imageUrl}
-                alt="preview"
-                className="mt-2 h-24 w-auto rounded border object-cover"
-                onError={() => {}}
-              />
-            )}
+            <div>
+              <label className="label">Category</label>
+              <select
+                className="input"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
+                <option value="MARKETING">Marketing</option>
+                <option value="UTILITY">Utility</option>
+                <option value="AUTHENTICATION">Authentication</option>
+              </select>
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <label className="label">Dispatch Action</label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="radio"
-                  name="opt"
-                  checked={sendOption === 'now'}
-                  onChange={() => setSendOption('now')}
-                />
-                <span>Broadcast Immediately</span>
-              </label>
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="radio"
-                  name="opt"
-                  checked={sendOption === 'scheduled'}
-                  onChange={() => setSendOption('scheduled')}
-                />
-                <span>Schedule for Day / Time</span>
-              </label>
-            </div>
+          <div>
+            <label className="label">Sample Message Body (Preview)</label>
+            <textarea
+              className="input font-medium text-xs h-20 resize-none"
+              value={bodyText}
+              onChange={(e) => setBodyText(e.target.value)}
+            />
+            <p className="text-[10px] text-gray-400 mt-0.5">Use &#123;&#123;1&#125;&#125; for customer name variable</p>
+          </div>
+
+          <div>
+            <label className="label">Header Image URL (Optional)</label>
+            <input
+              type="url"
+              className="input"
+              placeholder="https://example.com/banner.jpg"
+              value={headerUrl}
+              onChange={(e) => setHeaderUrl(e.target.value)}
+            />
           </div>
 
           <div className="pt-2 flex justify-end gap-2 border-t">
             <button type="button" onClick={onClose} className="btn-secondary text-xs">
               Cancel
             </button>
-            <button type="submit" className="btn-primary text-xs px-5 py-2">
-              {initialPost ? 'Repeat & Dispatch Now' : 'Publish Broadcast'}
+            <button type="submit" className="btn-primary text-xs">
+              Save & Connect Template
             </button>
           </div>
         </form>
@@ -317,3 +501,229 @@ function CreateOrRepeatModal({
   );
 }
 
+// ── Test Send Modal (1 Number) ───────────────────────────────────────────────
+function TestSendModal({
+  template,
+  onClose,
+  onSent,
+}: {
+  template: MetaTemplate;
+  onClose: () => void;
+  onSent: (res: any) => void;
+}) {
+  const [phone, setPhone] = useState('+918240813577');
+  const [customerName, setCustomerName] = useState('Aritra');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phone.trim()) return;
+
+    setLoading(true);
+    setError(null);
+
+    const components: any[] = [];
+    if (template.header_url) {
+      components.push({
+        type: 'header',
+        parameters: [{ type: 'image', image: { link: template.header_url } }],
+      });
+    }
+    if (customerName.trim()) {
+      components.push({
+        type: 'body',
+        parameters: [{ type: 'text', text: customerName.trim() }],
+      });
+    }
+
+    try {
+      const metaCreds = JSON.parse(localStorage.getItem('reachflow-active-wa') || '{}');
+      const res = await api.settings.sendTemplate({
+        to: phone,
+        template_name: template.name,
+        language_code: template.language || 'en',
+        components,
+        phone_number_id: metaCreds.phone_number_id || undefined,
+        token: metaCreds.token || undefined,
+      });
+
+      onSent(res);
+    } catch (err: any) {
+      setError(err.message || 'Failed to dispatch test message');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="card w-full max-w-md p-6 space-y-4 shadow-2xl">
+        <div className="flex items-center justify-between border-b pb-3">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Test Send Template</h2>
+            <p className="text-[11px] text-gray-500 font-mono">Template: {template.name}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X size={18} />
+          </button>
+        </div>
+
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-xs flex items-center gap-2">
+            <AlertCircle size={16} className="shrink-0 text-red-500" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSend} className="space-y-3.5 text-xs">
+          <div>
+            <label className="label">Send Test To Mobile Number *</label>
+            <input
+              type="text"
+              className="input font-mono font-bold"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+918240813577"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="label">Customer Name Variable (for &#123;&#123;1&#125;&#125;)</label>
+            <input
+              type="text"
+              className="input"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              placeholder="e.g. Aritra"
+            />
+          </div>
+
+          <div className="p-2.5 bg-gray-50 border rounded-lg text-[11px] text-gray-600">
+            This will trigger a real WhatsApp Cloud API request to verify template acceptance on Meta's servers.
+          </div>
+
+          <div className="pt-2 flex justify-end gap-2 border-t">
+            <button type="button" onClick={onClose} className="btn-secondary text-xs">
+              Cancel
+            </button>
+            <button type="submit" disabled={loading} className="btn-primary text-xs flex items-center gap-1.5">
+              {loading ? 'Sending...' : 'Send Test Now'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Bulk Broadcast Modal ─────────────────────────────────────────────────────
+function BroadcastModal({
+  template,
+  activeCount,
+  customers,
+  onClose,
+  onDispatched,
+}: {
+  template: MetaTemplate;
+  activeCount: number;
+  customers: any[];
+  onClose: () => void;
+  onDispatched: (summary: { total: number; sent: number; failed: number }) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleStartBroadcast = async () => {
+    if (customers.length === 0) {
+      alert('No active customers found. Please add or import customers in Customers Data first.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    const recipients = customers.map((c) => ({
+      mobile: c.whatsapp_e164 || c.mobile_number,
+      name: c.name || c.display_name || 'Customer',
+    }));
+
+    try {
+      const metaCreds = JSON.parse(localStorage.getItem('reachflow-active-wa') || '{}');
+      const res = await api.settings.broadcastTemplate({
+        recipients,
+        template_name: template.name,
+        language_code: template.language || 'en',
+        header_image_url: template.header_url || undefined,
+        phone_number_id: metaCreds.phone_number_id || undefined,
+        token: metaCreds.token || undefined,
+      });
+
+      onDispatched({
+        total: res.data?.total || recipients.length,
+        sent: res.data?.sent || 0,
+        failed: res.data?.failed || 0,
+      });
+    } catch (err: any) {
+      setError(err.message || 'Broadcast failed to dispatch');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="card w-full max-w-md p-6 space-y-4 shadow-2xl">
+        <div className="flex items-center justify-between border-b pb-3">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">Broadcast WhatsApp Template</h2>
+            <p className="text-[11px] text-gray-500 font-mono">Template: {template.name}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X size={18} />
+          </button>
+        </div>
+
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-xs flex items-center gap-2">
+            <AlertCircle size={16} className="shrink-0 text-red-500" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <div className="space-y-3 text-xs">
+          <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex items-center justify-between">
+            <div className="flex items-center gap-2 text-emerald-950 font-bold">
+              <Users size={16} className="text-emerald-700" />
+              <span>Target Audience:</span>
+            </div>
+            <span className="font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+              {activeCount} Active Customers
+            </span>
+          </div>
+
+          <div className="space-y-1 bg-gray-50 p-3 rounded-lg border text-gray-600 text-[11px]">
+            <div>• Each customer receives an individual message using Meta Cloud API.</div>
+            <div>• Variables like &#123;&#123;1&#125;&#125; are automatically replaced with each customer's name.</div>
+            <div>• Dispatches with safe pacing to respect Meta rate limits.</div>
+          </div>
+
+          <div className="pt-2 flex justify-end gap-2 border-t">
+            <button type="button" onClick={onClose} className="btn-secondary text-xs">
+              Cancel
+            </button>
+            <button
+              onClick={handleStartBroadcast}
+              disabled={loading || activeCount === 0}
+              className="btn-primary text-xs flex items-center gap-1.5"
+            >
+              {loading ? 'Broadcasting...' : `Send to ${activeCount} Customers`}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
