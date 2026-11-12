@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, loadLocalTemplates, saveLocalTemplates } from '../lib/api';
+import { api } from '../lib/api';
 import {
   Send,
   Plus,
@@ -47,7 +47,7 @@ interface BroadcastHistory {
 export default function PostsTemplatesPage() {
   const navigate = useNavigate();
 
-  const [templates, setTemplates] = useState<MetaTemplate[]>(loadLocalTemplates());
+  const [templates, setTemplates] = useState<MetaTemplate[]>([]);
   const [history, setHistory] = useState<BroadcastHistory[]>(() => {
     try {
       const raw = localStorage.getItem('reachflow-broadcast-history');
@@ -95,19 +95,23 @@ export default function PostsTemplatesPage() {
     });
   }, []);
 
+  useEffect(() => {
+    api.templates.list().then((list) => {
+      if (Array.isArray(list) && list.length > 0) {
+        setTemplates(list);
+      }
+    }).catch(() => {});
+  }, []);
+
   const handleSaveTemplates = (newTemplates: MetaTemplate[]) => {
     setTemplates(newTemplates);
-    saveLocalTemplates(newTemplates);
   };
 
   const handleSyncFromMeta = async () => {
     setSyncing(true);
     try {
-      const metaCreds = JSON.parse(localStorage.getItem('reachflow-active-wa') || '{}');
-      const remoteList = await api.settings.listTemplates({
-        waba_id: metaCreds.waba_id || '',
-        token: metaCreds.token || undefined,
-      });
+      await api.templates.sync();
+      const remoteList = await api.templates.list();
 
       if (Array.isArray(remoteList) && remoteList.length > 0) {
         const formatted: MetaTemplate[] = remoteList.map((t: any) => {
@@ -639,16 +643,11 @@ function TestSendModal({
     }
 
     try {
-      const metaCreds = JSON.parse(localStorage.getItem('reachflow-active-wa') || '{}');
-      const res = await api.settings.sendTemplate({
-        to: phone,
-        template_name: template.name,
-        language_code: template.language || 'en',
-        components,
-        phone_number_id: metaCreds.phone_number_id || undefined,
-        token: metaCreds.token || undefined,
-      });
-
+      // Create campaign for test send
+      const fd = new FormData();
+      fd.append('name', `Test - ${template.name}`);
+      fd.append('template_id', String((template as any).id || 1));
+      const res = await api.campaigns.create(fd);
       onSent(res);
     } catch (err: any) {
       setError(err.message || 'Failed to dispatch test message');
@@ -768,19 +767,10 @@ function BroadcastModal({
     setError(null);
 
     try {
-      const metaCreds = JSON.parse(localStorage.getItem('reachflow-active-wa') || '{}');
-      const hasBodyVar = /\{\{\d+\}\}/.test(template.body || '');
-      const finalHeader = formatImageUrl(headerImageUrl.trim()) || template.header_url || undefined;
-
-      const res = await api.settings.broadcastTemplate({
-        recipients: validRecipients,
-        template_name: template.name,
-        language_code: template.language || 'en',
-        header_image_url: finalHeader,
-        has_body_variable: hasBodyVar,
-        phone_number_id: metaCreds.phone_number_id || undefined,
-        token: metaCreds.token || undefined,
-      });
+      const fd = new FormData();
+      fd.append('name', `Broadcast - ${template.name}`);
+      fd.append('template_id', String((template as any).id || 1));
+      const res = await api.campaigns.create(fd);
 
       const summaryData = (res as any)?.data ?? res;
       const sent = typeof summaryData?.sent === 'number' ? summaryData.sent : validRecipients.length;

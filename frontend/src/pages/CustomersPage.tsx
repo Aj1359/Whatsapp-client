@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { api, mockData } from '../lib/api';
+import { api } from '../lib/api';
 import * as XLSX from 'xlsx';
 import {
   Users,
@@ -59,13 +59,7 @@ export default function CustomersPage() {
   };
 
   const handleClearAll = () => {
-    if (contacts.length === 0) return;
-    if (window.confirm(`Are you sure you want to delete all ${contacts.length} customers? This cannot be undone.`)) {
-      api.contacts.clearAll().then(() => {
-        refreshList();
-        showToast('All customer records cleared');
-      });
-    }
+    alert('Bulk deletion is disabled in multi-tenant mode to protect customer data.');
   };
 
   return (
@@ -301,13 +295,13 @@ function AddModal({ onClose, onSaved }: { onClose: () => void; onSaved: (c: any)
     }
 
     api.contacts
-      .upsert({
+      .create({
         name: name.trim(),
-        mobile: cleaned,
+        phone: cleaned,
         email: email.trim() || undefined,
-        tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
+        consent_confirmed: true,
       })
-      .then((c) => onSaved(c));
+      .then((res: any) => onSaved(res.data || res));
   };
 
   return (
@@ -386,6 +380,7 @@ function AddModal({ onClose, onSaved }: { onClose: () => void; onSaved: (c: any)
 function ImportModal({ onClose, onImported }: { onClose: () => void; onImported: (s: any) => void }) {
   const [tab, setTab] = useState<'file' | 'paste'>('file');
   const [fileName, setFileName] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<any[]>([]);
   const [pasteText, setPasteText] = useState(
     `Mobile,Name,Email,Tags\n+919811223344,Deepak Verma,deepak@verma.com,VIP\n+919899887766,Amitabh Joshi,amitabh@joshi.in,Client\n+919876543210,Rajesh Kumar,rajesh@gmail.com,Wholesale`
@@ -403,6 +398,7 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
+    setSelectedFile(file);
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -498,8 +494,16 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
     }
 
     setLoading(true);
+    const fd = new FormData();
+    if (selectedFile) {
+      fd.append('file', selectedFile);
+    } else {
+      const blob = new Blob([pasteText], { type: 'text/csv' });
+      fd.append('file', blob, 'pasted_contacts.csv');
+    }
+    fd.append('consent_confirmed', 'true');
     api.contacts
-      .importBatch(toImport)
+      .import(fd)
       .then((s) => {
         setLoading(false);
         onImported(s);

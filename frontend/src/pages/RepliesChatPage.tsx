@@ -227,12 +227,9 @@ export default function RepliesChatPage() {
 
     setSendingIndividualId(inquiry.id);
     try {
-      const metaCreds = JSON.parse(localStorage.getItem('reachflow-active-wa') || '{}');
       await api.replies.send({
         to: inquiry.from_e164,
         text,
-        phone_number_id: metaCreds.phone_number_id || undefined,
-        token: metaCreds.token || undefined,
       });
 
       const nowStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
@@ -272,15 +269,14 @@ export default function RepliesChatPage() {
 
     setSendingFollowup(true);
     try {
-      const metaCreds = JSON.parse(localStorage.getItem('reachflow-active-wa') || '{}');
-      const res: any = await api.replies.send({
-        to: targets,
-        text,
-        phone_number_id: metaCreds.phone_number_id || undefined,
-        token: metaCreds.token || undefined,
-      });
+      for (const target of targets) {
+        await api.replies.send({
+          to: target,
+          text,
+        });
+      }
 
-      const sentCount = res?.data?.sent ?? targets.length;
+      const sentCount = targets.length;
       const newLog = {
         id: Date.now().toString(),
         time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
@@ -312,10 +308,6 @@ export default function RepliesChatPage() {
       received_at: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
       timestamp: Date.now(),
     };
-
-    try {
-      await api.replies.testSeed(fakeReply);
-    } catch {}
 
     const updated = [fakeReply, ...replies];
     setReplies(updated);
