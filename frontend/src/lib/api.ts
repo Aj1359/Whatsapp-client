@@ -408,6 +408,8 @@ export const api = {
       template_name: string;
       language_code?: string;
       header_image_url?: string;
+      has_body_variable?: boolean;
+      components?: any[];
       phone_number_id?: string;
       token?: string;
     }) => {

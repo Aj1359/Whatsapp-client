@@ -100,13 +100,16 @@ export default function PostsTemplatesPage() {
           let bodyText = '';
           const bodyComp = (t.components || []).find((c: any) => c.type === 'BODY');
           if (bodyComp) bodyText = bodyComp.text || '';
+          const hasHeader = (t.components || []).some((c: any) => c.type === 'HEADER');
+          const hasBodyVars = /\{\{\d+\}\}/.test(bodyText);
           return {
             name: t.name,
             language: t.language || 'en',
             category: t.category || 'MARKETING',
             status: t.status || 'APPROVED',
             body: bodyText || `Meta template: ${t.name}`,
-            header_type: (t.components || []).some((c: any) => c.type === 'HEADER') ? 'image' : 'none',
+            header_type: hasHeader ? 'image' : 'none',
+            header_url: hasHeader ? 'https://images.unsplash.com/photo-1579208575657-c595a05383b7?w=800' : undefined,
           };
         });
 
@@ -562,13 +565,23 @@ function TestSendModal({
     setError(null);
 
     const components: any[] = [];
-    if (template.header_url) {
+    const hasHeader = template.header_type === 'image' || Boolean(template.header_url);
+    if (hasHeader) {
       components.push({
         type: 'header',
-        parameters: [{ type: 'image', image: { link: template.header_url } }],
+        parameters: [
+          {
+            type: 'image',
+            image: {
+              link: template.header_url || 'https://images.unsplash.com/photo-1579208575657-c595a05383b7?w=800',
+            },
+          },
+        ],
       });
     }
-    if (customerName.trim()) {
+
+    const hasBodyVar = /\{\{\d+\}\}/.test(template.body || '');
+    if (hasBodyVar && customerName.trim()) {
       components.push({
         type: 'body',
         parameters: [{ type: 'text', text: customerName.trim() }],
@@ -699,11 +712,13 @@ function BroadcastModal({
 
     try {
       const metaCreds = JSON.parse(localStorage.getItem('reachflow-active-wa') || '{}');
+      const hasBodyVar = /\{\{\d+\}\}/.test(template.body || '');
       const res = await api.settings.broadcastTemplate({
         recipients,
         template_name: template.name,
         language_code: template.language || 'en',
-        header_image_url: template.header_url || undefined,
+        header_image_url: template.header_url || (template.header_type === 'image' ? 'https://images.unsplash.com/photo-1579208575657-c595a05383b7?w=800' : undefined),
+        has_body_variable: hasBodyVar,
         phone_number_id: metaCreds.phone_number_id || undefined,
         token: metaCreds.token || undefined,
       });

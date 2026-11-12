@@ -302,6 +302,8 @@ const broadcastTemplateSchema = z.object({
   template_name: z.string().min(1),
   language_code: z.string().default('en'),
   header_image_url: z.string().optional(),
+  has_body_variable: z.boolean().optional(),
+  components: z.array(z.any()).optional(),
   phone_number_id: z.string().optional(),
   token: z.string().optional(),
 });
@@ -312,7 +314,16 @@ router.post('/whatsapp/broadcast-template', async (req: Request, res: Response) 
     return res.status(400).json({ error: { code: 'INVALID_INPUT', issues: parsed.error.issues } });
   }
 
-  const { recipients, template_name, language_code, header_image_url, phone_number_id: bodyPhoneId, token: bodyToken } = parsed.data;
+  const {
+    recipients,
+    template_name,
+    language_code,
+    header_image_url,
+    has_body_variable,
+    components: customComponents,
+    phone_number_id: bodyPhoneId,
+    token: bodyToken,
+  } = parsed.data;
   const orgId = getOrgId(req);
   const acc = inMemoryAccounts[orgId] || inMemoryAccounts['default'] || {};
   const phoneId = bodyPhoneId || acc.phone_number_id;
@@ -331,18 +342,22 @@ router.post('/whatsapp/broadcast-template', async (req: Request, res: Response) 
     const cleanedTo = r.mobile.replace(/[^0-9]/g, '');
     if (!cleanedTo || cleanedTo.length < 8) continue;
 
-    const components: any[] = [];
-    if (header_image_url) {
-      components.push({
-        type: 'header',
-        parameters: [{ type: 'image', image: { link: header_image_url } }],
-      });
-    }
-    if (r.name) {
-      components.push({
-        type: 'body',
-        parameters: [{ type: 'text', text: r.name }],
-      });
+    let components: any[] = [];
+    if (customComponents && customComponents.length > 0) {
+      components = customComponents;
+    } else {
+      if (header_image_url) {
+        components.push({
+          type: 'header',
+          parameters: [{ type: 'image', image: { link: header_image_url } }],
+        });
+      }
+      if (has_body_variable && r.name) {
+        components.push({
+          type: 'body',
+          parameters: [{ type: 'text', text: r.name }],
+        });
+      }
     }
 
     try {
