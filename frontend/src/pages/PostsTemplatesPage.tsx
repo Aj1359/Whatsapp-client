@@ -755,7 +755,7 @@ function BroadcastModal({
     try {
       const metaCreds = JSON.parse(localStorage.getItem('reachflow-active-wa') || '{}');
       const hasBodyVar = /\{\{\d+\}\}/.test(template.body || '');
-      const finalHeader = headerImageUrl.trim() || template.header_url || (template.header_type === 'image' ? 'https://images.unsplash.com/photo-1579208575657-c595a05383b7?w=800' : undefined);
+      const finalHeader = formatImageUrl(headerImageUrl.trim()) || template.header_url || undefined;
 
       const res = await api.settings.broadcastTemplate({
         recipients: validRecipients,
@@ -881,6 +881,26 @@ function BroadcastModal({
   );
 }
 
+function formatImageUrl(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return '';
+
+  // Google Drive conversion
+  if (trimmed.includes('drive.google.com') || trimmed.includes('docs.google.com')) {
+    const match = trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/) || trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (match && match[1]) {
+      return `https://lh3.googleusercontent.com/d/${match[1]}`;
+    }
+  }
+
+  // Dropbox conversion
+  if (trimmed.includes('dropbox.com')) {
+    return trimmed.replace('dl=0', 'raw=1');
+  }
+
+  return trimmed;
+}
+
 // ── Edit Image Modal ─────────────────────────────────────────────────────────
 function EditImageModal({
   template,
@@ -891,9 +911,20 @@ function EditImageModal({
   onClose: () => void;
   onSaved: (url: string) => void;
 }) {
+  const [rawInput, setRawInput] = useState(template.header_url || '');
   const [url, setUrl] = useState(template.header_url || '');
+  const [isDrive, setIsDrive] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
+
+  const handleUrlChange = (val: string) => {
+    setRawInput(val);
+    const converted = formatImageUrl(val);
+    setUrl(converted);
+    setIsDrive(val.includes('drive.google.com'));
+    setImgError(false);
+    setImgLoaded(false);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -910,20 +941,21 @@ function EditImageModal({
 
         <div className="space-y-3.5 text-xs">
           <div>
-            <label className="label">Direct Image URL (.jpg, .png)</label>
+            <label className="label">Image URL or Google Drive Link</label>
             <input
               type="url"
               className="input font-mono text-xs"
-              placeholder="https://example.com/banner.jpg"
-              value={url}
-              onChange={(e) => {
-                setUrl(e.target.value);
-                setImgError(false);
-                setImgLoaded(false);
-              }}
+              placeholder="https://drive.google.com/file/d/... or https://...jpg"
+              value={rawInput}
+              onChange={(e) => handleUrlChange(e.target.value)}
             />
+            {isDrive && (
+              <p className="text-[11px] text-blue-700 bg-blue-50 border border-blue-200 p-2 rounded-lg mt-1 font-semibold">
+                Google Drive link detected! Converted to direct image format. Please ensure General Access in Google Drive is set to <strong>"Anyone with the link can view"</strong>.
+              </p>
+            )}
             <p className="text-[10px] text-gray-400 mt-1">
-              Must be a direct, public link to an image file.
+              Supports direct image links (.jpg, .png) and public Google Drive image links.
             </p>
           </div>
 
