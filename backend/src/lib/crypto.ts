@@ -1,19 +1,22 @@
-import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'crypto';
+import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
 
 /**
- * Ensures key is always exactly 32 bytes for AES-256-GCM.
+ * Validates and retrieves the 32-byte key from base64 representation.
+ * Throws if the key is not exactly 32 bytes.
  */
-function getValidKey(rawKey: string): Buffer {
-  if (!rawKey) rawKey = 'reachflow-default-secret-encryption-key-2026';
-  try {
-    const b64 = Buffer.from(rawKey, 'base64');
-    if (b64.length === 32) return b64;
-  } catch {}
-  return createHash('sha256').update(rawKey).digest();
+function getValidKey(base64Key: string): Buffer {
+  if (!base64Key) {
+    throw new Error('ENCRYPTION_KEY is required and cannot be empty');
+  }
+  const key = Buffer.from(base64Key, 'base64');
+  if (key.length !== 32) {
+    throw new Error('ENCRYPTION_KEY must be exactly 32 bytes when base64-decoded');
+  }
+  return key;
 }
 
 /**
@@ -29,6 +32,9 @@ export function encryptToken(plaintext: string, base64Key: string): string {
   return `${iv.toString('base64')}:${encrypted.toString('base64')}:${tag.toString('base64')}`;
 }
 
+/**
+ * Decrypts an AES-256-GCM encrypted string.
+ */
 export function decryptToken(ciphertext: string, base64Key: string): string {
   const key = getValidKey(base64Key);
   const parts = ciphertext.split(':');
@@ -41,8 +47,11 @@ export function decryptToken(ciphertext: string, base64Key: string): string {
   const enc = Buffer.from(encB64, 'base64');
   const tag = Buffer.from(tagB64, 'base64');
 
+  if (iv.length !== IV_LENGTH || tag.length !== TAG_LENGTH) {
+    throw new Error('Invalid IV or auth tag length');
+  }
+
   const decipher = createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8');
 }
-
