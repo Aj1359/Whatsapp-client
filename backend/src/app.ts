@@ -11,6 +11,7 @@ import templatesRouter from './routes/templates.js';
 import campaignsRouter from './routes/campaigns.js';
 import settingsRouter from './routes/settings.js';
 import repliesRouter from './routes/replies.js';
+import './services/forwardingService.js';
 
 export const app = express();
 
