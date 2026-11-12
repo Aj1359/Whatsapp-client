@@ -1,3 +1,4 @@
+// Append progress and message breakdown to campaigns route
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
@@ -49,6 +50,125 @@ router.get('/', async (req: Request, res: Response) => {
     return res.status(500).json({
       error: { code: 'DATABASE_ERROR', message: err.message },
     });
+  } finally {
+    if (client) client.release();
+  }
+});
+
+// ── GET /api/campaigns/:id/progress (Live verified counts from messages table) 
+router.get('/:id/progress', async (req: Request, res: Response) => {
+  const orgId = getOrgId(req);
+  let client;
+  try {
+    client = await pool.connect();
+    const { rows: campRows } = await client.query(
+      `SELECT id, name, status, total, started_at, completed_at, pause_reason FROM campaigns WHERE id = $1 AND org_id = $2`,
+      [req.params.id, orgId]
+    );
+
+    if (campRows.length === 0) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Campaign not found' } });
+    }
+
+    const { rows: counts } = await client.query(
+      `SELECT
+         COUNT(*)::int as total,
+         COUNT(*) FILTER (WHERE status = 'queued')::int as queued,
+         COUNT(*) FILTER (WHERE status = 'sending')::int as sending,
+         COUNT(*) FILTER (WHERE status = 'sent')::int as sent_only,
+         COUNT(*) FILTER (WHERE status IN ('delivered', 'read'))::int as delivered,
+         COUNT(*) FILTER (WHERE status = 'read')::int as read,
+         COUNT(*) FILTER (WHERE status = 'failed')::int as failed,
+         COUNT(*) FILTER (WHERE status = 'skipped')::int as skipped
+       FROM messages
+       WHERE campaign_id = $1 AND org_id = $2`,
+      [req.params.id, orgId]
+    );
+
+    // Check count of inbound customer replies matched to this campaign
+    const { rows: replyCount } = await client.query(
+      `SELECT COUNT(*)::int as replied FROM inbound_messages WHERE matched_campaign_id = $1 AND org_id = $2`,
+      [req.params.id, orgId]
+    );
+
+    const c = counts[0] || { total: 0, queued: 0, sending: 0, sent_only: 0, delivered: 0, read: 0, failed: 0, skipped: 0 };
+    return res.json({
+      data: {
+        campaign: campRows[0],
+        counts: {
+          total: c.total,
+          queued: c.queued,
+          sending: c.sending,
+          sent: c.sent_only,
+          delivered: c.delivered,
+          read: c.read,
+          failed: c.failed,
+          skipped: c.skipped,
+          replied: replyCount[0]?.replied || 0,
+        },
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: { code: 'DATABASE_ERROR', message: err.message } });
+  } finally {
+    if (client) client.release();
+  }
+});
+
+// ── GET /api/campaigns/:id/messages (Per-contact delivery status & timestamps) 
+router.get('/:id/messages', async (req: Request, res: Response) => {
+  const orgId = getOrgId(req);
+  const { status, page = '1', limit = '50' } = req.query as Record<string, string>;
+  const pageNum = Math.max(1, parseInt(page, 10));
+  const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
+  const offset = (pageNum - 1) * limitNum;
+
+  let client;
+  try {
+    client = await pool.connect();
+
+    let whereClause = `WHERE m.campaign_id = $1 AND m.org_id = $2`;
+    const params: any[] = [req.params.id, orgId];
+
+    if (status) {
+      if (status === 'delivered_not_seen') {
+        whereClause += ` AND m.status = 'delivered'`;
+      } else if (status === 'seen') {
+        whereClause += ` AND m.status = 'read'`;
+      } else if (status === 'sent_not_delivered') {
+        whereClause += ` AND m.status = 'sent'`;
+      } else {
+        params.push(status);
+        whereClause += ` AND m.status = $${params.length}`;
+      }
+    }
+
+    const { rows: countRes } = await client.query(
+      `SELECT COUNT(*) FROM messages m ${whereClause}`,
+      params
+    );
+    const total = parseInt(countRes[0].count, 10);
+
+    const { rows } = await client.query(
+      `SELECT m.id, m.status, m.wa_message_id, m.error_code, m.error_message,
+              m.queued_at, m.sent_at, m.delivered_at, m.read_at, m.failed_at,
+              c.id as contact_id, c.name as contact_name, c.whatsapp_e164
+       FROM messages m
+       JOIN contacts c ON m.contact_id = c.id
+       ${whereClause}
+       ORDER BY m.id ASC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limitNum, offset]
+    );
+
+    return res.json({
+      data: rows,
+      total,
+      page: pageNum,
+      limit: limitNum,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: { code: 'DATABASE_ERROR', message: err.message } });
   } finally {
     if (client) client.release();
   }

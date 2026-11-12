@@ -5,6 +5,7 @@ import { rateLimit } from 'express-rate-limit';
 import { env } from './config/env.js';
 import webhooksRouter from './routes/webhooks.js';
 import internalRouter from './routes/internal.js';
+import dashboardRouter from './routes/dashboard.js';
 import contactsRouter from './routes/contacts.js';
 import templatesRouter from './routes/templates.js';
 import campaignsRouter from './routes/campaigns.js';
@@ -58,6 +59,7 @@ app.get('/healthz', (_req: Request, res: Response) => {
 // Mount Routes
 app.use('/webhooks', webhooksRouter);
 app.use('/internal', internalRouter);
+app.use('/api/dashboard', dashboardRouter);
 app.use('/api/contacts', contactsRouter);
 app.use('/api/templates', templatesRouter);
 app.use('/api/campaigns', campaignsRouter);

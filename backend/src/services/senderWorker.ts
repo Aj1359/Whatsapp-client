@@ -254,3 +254,4 @@ export function startSendingWorker() {
   }, 1000);
   logger.info('Sending worker loop initialized (1s cycle)');
 }
+
