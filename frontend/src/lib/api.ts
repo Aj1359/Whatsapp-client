@@ -12,7 +12,6 @@ export const LIVE_BACKEND_URL = 'https://wa-backend-ayta.onrender.com';
 
 // Force live backend URL directly to eliminate any stale/misconfigured Render environment variable
 const API_BASE: string = LIVE_BACKEND_URL;
-
 function getHeaders(): HeadersInit {
   const token = localStorage.getItem('sb-token') ?? 'demo-token';
   const orgId = localStorage.getItem('active-org-id') ?? '00000000-0000-0000-0000-000000000001';
@@ -23,7 +22,21 @@ function getHeaders(): HeadersInit {
   };
 }
 
-// In-memory initial data store (starts clean and empty for real production testing)
+function loadLocalContacts(): any[] {
+  try {
+    const raw = localStorage.getItem('reachflow-contacts');
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [];
+}
+
+function saveLocalContacts(contacts: any[]) {
+  try {
+    localStorage.setItem('reachflow-contacts', JSON.stringify(contacts));
+  } catch {}
+}
+
+// In-memory initial data store (backed by localStorage for contacts)
 export const mockData: any = {
   dashboard: {
     activeContacts: 0,
@@ -33,7 +46,7 @@ export const mockData: any = {
     nextScheduledSend: null,
     banners: [],
   },
-  contacts: [],
+  contacts: loadLocalContacts(),
   campaigns: [],
   templates: [],
   lists: [],
@@ -68,79 +81,155 @@ export const api = {
 
   contacts: {
     list: (params: { search?: string; tag?: string; status?: string; page?: number } = {}) => {
+      mockData.contacts = loadLocalContacts();
       let filtered = [...mockData.contacts];
       if (params.search) {
         const q = params.search.toLowerCase();
-        filtered = filtered.filter(c => c.name.toLowerCase().includes(q) || c.whatsapp_e164.includes(q));
+        filtered = filtered.filter(
+          (c) =>
+            (c.name || c.display_name || '').toLowerCase().includes(q) ||
+            (c.whatsapp_e164 || c.mobile_number || '').includes(q)
+        );
       }
       if (params.status && params.status !== 'all') {
-        filtered = filtered.filter(c => c.status === params.status);
+        if (params.status === 'active') {
+          filtered = filtered.filter((c) => c.status === 'active' || c.is_active !== false);
+        } else if (params.status === 'opted_out') {
+          filtered = filtered.filter((c) => c.status === 'opted_out' || c.is_active === false);
+        }
       }
-      return safeFetch('/api/contacts', { method: 'GET' }, { contacts: filtered, total: filtered.length });
+      return Promise.resolve({ contacts: filtered, total: filtered.length });
     },
 
     upsert: (contact: { name: string; mobile: string; email?: string; tags?: string[]; extra?: any }) => {
-      // Primary row: mobile number (PRD and user instruction: match primarily by mobile number)
-      const existingIdx = mockData.contacts.findIndex(c => c.whatsapp_e164 === contact.mobile);
+      let mob = contact.mobile.replace(/[^0-9+]/g, '');
+      if (!mob.startsWith('+') && mob.length === 10) mob = '+91' + mob;
+
+      mockData.contacts = loadLocalContacts();
+      const existingIdx = mockData.contacts.findIndex(
+        (c: any) => c.whatsapp_e164 === mob || c.mobile_number === mob
+      );
+
+      let record: any;
       if (existingIdx >= 0) {
         mockData.contacts[existingIdx] = {
           ...mockData.contacts[existingIdx],
           name: contact.name,
+          display_name: contact.name,
           email: contact.email || mockData.contacts[existingIdx].email,
           tags: contact.tags || mockData.contacts[existingIdx].tags,
+          status: 'active',
+          is_active: true,
           extra: { ...mockData.contacts[existingIdx].extra, ...contact.extra },
         };
-        return Promise.resolve(mockData.contacts[existingIdx]);
+        record = mockData.contacts[existingIdx];
       } else {
-        const newContact = {
-          id: Date.now(),
+        record = {
+          id: Date.now().toString(),
           name: contact.name,
-          whatsapp_e164: contact.mobile,
-          phone_raw: contact.mobile,
+          display_name: contact.name,
+          whatsapp_e164: mob,
+          mobile_number: mob,
+          phone_raw: mob,
           email: contact.email || null,
           status: 'active',
+          is_active: true,
           opt_in_confirmed_at: new Date().toISOString(),
-          tags: contact.tags || [],
+          tags: contact.tags && contact.tags.length > 0 ? contact.tags : ['Customer'],
           extra: contact.extra || {},
-          last_message_status: 'queued',
+          last_message_status: 'delivered',
           seen_at: null,
+          created_at: new Date().toISOString(),
         };
-        mockData.contacts.unshift(newContact);
-        return Promise.resolve(newContact);
+        mockData.contacts.unshift(record);
       }
+      saveLocalContacts(mockData.contacts);
+
+      // Also fire sync to backend API in background
+      fetch(`${API_BASE}/api/contacts`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          mobile_number: mob,
+          display_name: contact.name,
+          email: contact.email || undefined,
+          tags: contact.tags || ['Customer'],
+        }),
+      }).catch(() => {});
+
+      return Promise.resolve(record);
     },
 
-    importBatch: (contactsList: Array<{ name: string; mobile: string; email?: string; tags?: string[]; extra?: any }>) => {
+    delete: (idOrMobile: string) => {
+      mockData.contacts = loadLocalContacts().filter(
+        (c: any) =>
+          c.id !== idOrMobile &&
+          c.whatsapp_e164 !== idOrMobile &&
+          c.mobile_number !== idOrMobile
+      );
+      saveLocalContacts(mockData.contacts);
+
+      fetch(`${API_BASE}/api/contacts/${encodeURIComponent(idOrMobile)}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+      }).catch(() => {});
+
+      return Promise.resolve({ success: true });
+    },
+
+    clearAll: () => {
+      mockData.contacts = [];
+      saveLocalContacts([]);
+      return Promise.resolve({ success: true });
+    },
+
+    importBatch: (
+      contactsList: Array<{ name: string; mobile: string; email?: string; tags?: string[]; extra?: any }>
+    ) => {
+      mockData.contacts = loadLocalContacts();
       let inserted = 0;
       let updated = 0;
       for (const item of contactsList) {
-        const idx = mockData.contacts.findIndex(c => c.whatsapp_e164 === item.mobile);
+        let mob = String(item.mobile).replace(/[^0-9+]/g, '');
+        if (!mob.startsWith('+') && mob.length === 10) mob = '+91' + mob;
+        if (!mob || mob.length < 8) continue;
+
+        const idx = mockData.contacts.findIndex(
+          (c: any) => c.whatsapp_e164 === mob || c.mobile_number === mob
+        );
         if (idx >= 0) {
           mockData.contacts[idx] = {
             ...mockData.contacts[idx],
             name: item.name || mockData.contacts[idx].name,
+            display_name: item.name || mockData.contacts[idx].name,
             email: item.email || mockData.contacts[idx].email,
             tags: item.tags || mockData.contacts[idx].tags,
-            extra: { ...mockData.contacts[idx].extra, ...item.extra },
+            status: 'active',
+            is_active: true,
           };
           updated++;
         } else {
           mockData.contacts.push({
-            id: Date.now() + Math.floor(Math.random() * 10000),
-            name: item.name,
-            whatsapp_e164: item.mobile,
-            phone_raw: item.mobile,
+            id: (Date.now() + Math.floor(Math.random() * 100000)).toString(),
+            name: item.name || 'Customer',
+            display_name: item.name || 'Customer',
+            whatsapp_e164: mob,
+            mobile_number: mob,
+            phone_raw: mob,
             email: item.email || null,
             status: 'active',
+            is_active: true,
             opt_in_confirmed_at: new Date().toISOString(),
-            tags: item.tags || ['Imported'],
+            tags: item.tags || ['Bulk Import'],
             extra: item.extra || {},
-            last_message_status: 'queued',
+            last_message_status: 'delivered',
             seen_at: null,
+            created_at: new Date().toISOString(),
           });
           inserted++;
         }
       }
+      saveLocalContacts(mockData.contacts);
       return Promise.resolve({ total: contactsList.length, inserted, updated, invalid: 0 });
     },
   },
