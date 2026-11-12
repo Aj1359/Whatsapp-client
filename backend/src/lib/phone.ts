@@ -27,6 +27,17 @@ export function normalisePhoneNumber(input: string, defaultCountry = 'IN'): {
 }
 
 /**
+ * Backward compatibility alias for toE164
+ */
+export function toE164(input: string, defaultCountry = 'IN'): string {
+  const res = normalisePhoneNumber(input, defaultCountry);
+  if (!res.isValid || !res.e164) {
+    throw new Error(`Invalid phone number: ${input}`);
+  }
+  return res.e164;
+}
+
+/**
  * Masks phone numbers for logging per PRD requirement:
  * "+9198*****10 and never include tokens"
  */
