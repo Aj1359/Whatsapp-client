@@ -451,6 +451,18 @@ export const api = {
       }
       return json.data ?? json;
     },
+    subscribeWaba: async (data?: { waba_id?: string; token?: string }) => {
+      const res = await fetch(`${API_BASE}/api/settings/whatsapp/subscribe-waba`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(data || {}),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error?.message || 'Failed to subscribe app to WABA');
+      }
+      return json.data ?? json;
+    },
   },
 };
 

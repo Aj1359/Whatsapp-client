@@ -61,6 +61,23 @@ export default function RepliesChatPage() {
   const [loadingReplies, setLoadingReplies] = useState(false);
   const [individualReplyTexts, setIndividualReplyTexts] = useState<Record<string, string>>({});
   const [sendingIndividualId, setSendingIndividualId] = useState<string | number | null>(null);
+  const [subscribingWebhook, setSubscribingWebhook] = useState(false);
+
+  const handleSubscribeWebhook = async () => {
+    setSubscribingWebhook(true);
+    try {
+      const metaCreds = JSON.parse(localStorage.getItem('reachflow-active-wa') || '{}');
+      await api.settings.subscribeWaba({
+        waba_id: metaCreds.waba_id || undefined,
+        token: metaCreds.token || undefined,
+      });
+      showNotification('Meta App subscribed to WABA webhook successfully!');
+    } catch (err: any) {
+      showNotification(`Webhook subscription: ${err.message}`, 'error');
+    } finally {
+      setSubscribingWebhook(false);
+    }
+  };
 
   // ── SECTION 2: 24-HOUR BROADCAST FOLLOW-UP STATE ──────────────────────────
   const [broadcasts, setBroadcasts] = useState<BroadcastItem[]>(() => {
@@ -430,6 +447,42 @@ export default function RepliesChatPage() {
                   <ShieldCheck size={13} className="text-emerald-600" />
                   Meta Customer Care Window (Free ₹0.00)
                 </span>
+              </div>
+            </div>
+
+            {/* Live Webhook & Inbound Sync Helper */}
+            <div className="bg-gradient-to-r from-blue-50/70 to-emerald-50/70 border border-blue-200/80 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <strong className="text-gray-900 font-bold">Meta Webhook Live Endpoint:</strong>
+                  <code className="bg-white px-2 py-0.5 rounded border text-[11px] font-mono text-blue-900">
+                    https://wa-backend-ayta.onrender.com/webhooks/whatsapp
+                  </code>
+                </div>
+                <p className="text-[11px] text-gray-500">
+                  Ensure <strong>&ldquo;messages&rdquo;</strong> is subscribed in Meta Developer Console under WhatsApp &rarr; Configuration.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleSubscribeWebhook}
+                  disabled={subscribingWebhook}
+                  className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5 font-bold shadow-sm"
+                >
+                  <RefreshCw size={12} className={subscribingWebhook ? 'animate-spin' : ''} />
+                  {subscribingWebhook ? 'Subscribing…' : 'Subscribe App to WABA Webhook'}
+                </button>
+                <a
+                  href="https://developers.facebook.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-700 underline font-semibold flex items-center gap-0.5"
+                >
+                  Meta Console <ExternalLink size={11} />
+                </a>
               </div>
             </div>
 

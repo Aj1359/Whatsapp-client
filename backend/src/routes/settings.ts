@@ -394,5 +394,29 @@ router.post('/whatsapp/broadcast-template', async (req: Request, res: Response) 
   });
 });
 
+// ── POST /api/settings/whatsapp/subscribe-waba ──────────────────────────────
+router.post('/whatsapp/subscribe-waba', async (req: Request, res: Response) => {
+  const orgId = getOrgId(req);
+  const acc = inMemoryAccounts[orgId] || inMemoryAccounts['default'] || {};
+  const wabaId = req.body.waba_id || acc.waba_id || process.env.WHATSAPP_WABA_ID || '1360714332762492';
+  const token =
+    req.body.token ||
+    acc.token_plain ||
+    (acc.token_encrypted ? decryptToken(acc.token_encrypted, ENCRYPTION_KEY) : null) ||
+    process.env.META_ACCESS_TOKEN;
+
+  if (!wabaId || !token) {
+    return res.status(400).json({ error: { message: 'Missing WABA ID or Token.' } });
+  }
+
+  const waClient = new WhatsAppClient();
+  try {
+    const data = await waClient.subscribeApp(wabaId, token);
+    return res.json({ data: { success: true, message: 'App subscribed to WABA webhook successfully!', meta_response: data } });
+  } catch (err: any) {
+    return res.status(400).json({ error: { message: err.message || 'Failed to subscribe app to WABA.' } });
+  }
+});
+
 export default router;
 

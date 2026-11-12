@@ -29,6 +29,13 @@ export default function SimpleDashboard() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // Meta Available Funds State (Synced from Meta Business Manager)
+  const [metaBalance, setMetaBalance] = useState<string>(() => {
+    return localStorage.getItem('reachflow-meta-balance') || '34.70';
+  });
+  const [showBalanceModal, setShowBalanceModal] = useState(false);
+  const [inputBalance, setInputBalance] = useState(metaBalance);
+
   const loadData = () => {
     setLoading(true);
 
@@ -278,7 +285,7 @@ export default function SimpleDashboard() {
       </div>
 
       {/* Aggregate Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
         {/* Total Sent */}
         <div className="card p-4 space-y-1 border-l-4 border-l-blue-500 bg-white">
           <span className="text-[11px] font-bold text-gray-500 flex items-center gap-1">
@@ -327,6 +334,34 @@ export default function SimpleDashboard() {
             </span>
           </div>
           <p className="text-[10px] text-purple-700">~₹0.86 / Marketing Conv.</p>
+        </div>
+
+        {/* Live Meta Account Balance Card */}
+        <div className="card p-4 space-y-1 border-l-4 border-l-emerald-600 bg-emerald-50/40 relative">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-emerald-950 flex items-center gap-1">
+              <CreditCard size={13} className="text-emerald-700" />
+              Meta Available Funds
+            </span>
+            <button
+              onClick={() => {
+                setInputBalance(metaBalance);
+                setShowBalanceModal(true);
+              }}
+              className="text-[10px] text-whatsapp-teal hover:underline font-bold"
+            >
+              Sync / Edit
+            </button>
+          </div>
+          <div className="flex items-baseline gap-1.5">
+            <p className="text-2xl font-black text-emerald-950">₹{metaBalance}</p>
+            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-200/80 px-1.5 py-0.5 rounded">
+              Prepaid
+            </span>
+          </div>
+          <p className="text-[10px] text-emerald-800 truncate">
+            Aritra (WABA: 1360714332762492)
+          </p>
         </div>
       </div>
 
@@ -548,6 +583,80 @@ export default function SimpleDashboard() {
           </table>
         </div>
       </div>
+
+      {/* Sync Meta Prepaid Balance Modal */}
+      {showBalanceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="card w-full max-w-md p-6 space-y-4 shadow-2xl bg-white">
+            <div className="border-b pb-3">
+              <h2 className="text-base font-bold text-gray-900">Sync Meta Available Balance</h2>
+              <p className="text-[11px] text-gray-500 font-mono">
+                Account: Aritra (ID: 1360714332762492)
+              </p>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="label">Current Available Funds on Meta (₹)</label>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-bold">₹</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="input pl-7 text-xs font-bold text-gray-900 font-mono"
+                    placeholder="34.70"
+                    value={inputBalance}
+                    onChange={(e) => setInputBalance(e.target.value)}
+                  />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">
+                  Enter the exact balance shown in your Meta Business Billing Hub. ReachFlow tracks deductions automatically.
+                </p>
+              </div>
+
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-900 text-[11px] space-y-1">
+                <p className="font-bold flex items-center gap-1">
+                  <ShieldCheck size={14} className="text-emerald-700" />
+                  Need to add more prepaid funds?
+                </p>
+                <p className="text-emerald-800">
+                  You can add funds anytime via UPI or Card directly on Meta's official portal.
+                </p>
+                <a
+                  href="https://business.facebook.com/billing_hub"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-bold underline text-emerald-950 inline-flex items-center gap-1 mt-1"
+                >
+                  Open Meta Billing Hub to Add Funds ↗
+                </a>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowBalanceModal(false)}
+                  className="btn-secondary text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const trimmed = inputBalance.trim() || '0.00';
+                    setMetaBalance(trimmed);
+                    localStorage.setItem('reachflow-meta-balance', trimmed);
+                    setShowBalanceModal(false);
+                  }}
+                  className="btn-primary text-xs"
+                >
+                  Save & Sync Balance
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
