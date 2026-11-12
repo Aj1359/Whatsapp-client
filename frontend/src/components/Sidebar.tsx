@@ -39,9 +39,11 @@ export function Sidebar() {
     <aside className="flex flex-col h-screen w-64 bg-[#075E54] text-white shrink-0 shadow-xl border-r border-[#064e46]">
       {/* Brand Header */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10 bg-[#064e46]">
-        <div className="w-10 h-10 rounded-xl bg-[#25D366] flex items-center justify-center text-white shadow-md">
-          <MessageSquare size={22} />
-        </div>
+        <img
+          src="/logo.png"
+          alt="ReachFlow Logo"
+          className="w-10 h-10 rounded-xl object-cover shadow-md border border-white/20 bg-black/20"
+        />
         <div>
           <h2 className="font-extrabold text-sm tracking-wide">ReachFlow</h2>
           <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider truncate max-w-[140px]">

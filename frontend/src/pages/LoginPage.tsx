@@ -68,12 +68,11 @@ export default function LoginPage() {
           
           {/* Logo & Platform Tag */}
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#128C7E] to-[#25D366] flex items-center justify-center shadow-lg shadow-emerald-950/40 border border-emerald-400/30">
-              <div className="relative">
-                <MessageSquare size={26} className="text-white fill-white/20" />
-                <BarChart3 size={13} className="text-white absolute top-1 left-1.5" />
-              </div>
-            </div>
+            <img
+              src="/logo.png"
+              alt="ReachFlow Logo"
+              className="w-12 h-12 rounded-2xl shadow-lg shadow-emerald-950/40 border border-emerald-400/30 object-cover"
+            />
             <div>
               <span className="text-2xl font-black tracking-tight text-white block leading-none">
                 ReachFlow
