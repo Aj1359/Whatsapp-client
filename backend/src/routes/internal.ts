@@ -13,22 +13,11 @@ const ADVISORY_LOCK_ID = 918273645;
 let lastTemplateSyncAt = 0;
 
 /**
- * POST /internal/tick
- * Protected by X-Cron-Secret header and pg_try_advisory_lock.
- * Safe to be pinged every minute by external cron (Render cron, GitHub Actions, Cloudflare Worker).
- *
- * Operations:
- * 1. Start scheduled campaigns whose scheduled_at is due.
- * 2. Convert today's planned daily_entries into active campaigns.
- * 3. Mark daily_entries more than 2 hours late as 'missed'.
- * 4. Sweep stuck messages (stuck in 'sending' > 5 min -> INTERRUPTED).
- * 5. Run sending worker batch.
- * 6. Process follow-up sequences.
- * 7. Retry failed forwards (up to 3 times).
- * 8. Sync templates every 30 minutes.
- * 9. Delete webhook_events older than 30 days.
+ * POST /internal/tick & GET /internal/tick
+ * Protected by X-Cron-Secret header or ?secret= query param, and pg_try_advisory_lock.
+ * Safe to be pinged every 1-5 minutes by external cron (cron-job.org, Render cron, etc.).
  */
-router.post('/tick', async (req: Request, res: Response) => {
+const handleTick = async (req: Request, res: Response) => {
   const secret = req.headers['x-cron-secret'] || req.query.secret;
 
   if (!secret || secret !== env.CRON_SECRET) {
@@ -184,7 +173,10 @@ router.post('/tick', async (req: Request, res: Response) => {
   } finally {
     if (client) client.release();
   }
-});
+};
+
+router.post('/tick', handleTick);
+router.get('/tick', handleTick);
 
 // GET /internal/ping for simple platform keep-alive
 router.get('/ping', (_req: Request, res: Response) => {
