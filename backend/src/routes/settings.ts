@@ -78,7 +78,7 @@ const saveCredentialsSchema = z.object({
   forward_template_language: z.string().optional(),
 });
 
-router.post('/whatsapp', async (req: Request, res: Response) => {
+const saveWhatsAppHandler = async (req: Request, res: Response) => {
   const orgId = getOrgId(req);
   const parsed = saveCredentialsSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -183,7 +183,10 @@ router.post('/whatsapp', async (req: Request, res: Response) => {
   } finally {
     if (client) client.release();
   }
-});
+};
+
+router.post('/whatsapp', saveWhatsAppHandler);
+router.put('/whatsapp', saveWhatsAppHandler);
 
 // ── DELETE /api/settings/whatsapp (Disconnect) ──────────────────────────────
 router.delete('/whatsapp', async (req: Request, res: Response) => {

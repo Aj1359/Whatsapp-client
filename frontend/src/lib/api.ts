@@ -145,7 +145,7 @@ export const api = {
   // ── Settings ────────────────────────────────────────────────────────────────
   settings: {
     getWhatsApp: () => request<any>('/api/settings/whatsapp'),
-    saveWhatsApp: (data: {
+    saveWhatsApp: async (data: {
       phone_number_id: string;
       waba_id: string;
       token: string;
@@ -154,7 +154,16 @@ export const api = {
       forward_to_e164?: string;
       forward_template_name?: string;
       forward_template_language?: string;
-    }) => request<any>('/api/settings/whatsapp', { method: 'POST', body: JSON.stringify(data) }),
+    }) => {
+      try {
+        return await request<any>('/api/settings/whatsapp', { method: 'POST', body: JSON.stringify(data) });
+      } catch (err: any) {
+        if (err.status === 404) {
+          return await request<any>('/api/settings/whatsapp', { method: 'PUT', body: JSON.stringify(data) });
+        }
+        throw err;
+      }
+    },
     disconnectWhatsApp: () => request<any>('/api/settings/whatsapp', { method: 'DELETE' }),
     testWhatsApp: (data?: { phone_number_id?: string; token?: string }) =>
       request<any>('/api/settings/whatsapp/test', { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
