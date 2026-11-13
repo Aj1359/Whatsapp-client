@@ -203,28 +203,47 @@ router.delete('/whatsapp', async (req: Request, res: Response) => {
 });
 
 // ── POST /api/settings/whatsapp/test ────────────────────────────────────────
+const testConnectionSchema = z.object({
+  phone_number_id: z.string().optional(),
+  token: z.string().optional(),
+});
+
 router.post('/whatsapp/test', async (req: Request, res: Response) => {
   const orgId = getOrgId(req);
+  const parsed = testConnectionSchema.safeParse(req.body || {});
+  const bodyPhoneId = parsed.success ? parsed.data.phone_number_id?.trim() : undefined;
+  const bodyToken = parsed.success ? parsed.data.token?.trim() : undefined;
+
+  let targetPhoneId = bodyPhoneId;
+  let targetToken = bodyToken;
+
   let client;
   try {
     client = await pool.connect();
-    const { rows } = await client.query(
-      `SELECT phone_number_id, token_encrypted FROM whatsapp_accounts WHERE org_id = $1`,
-      [orgId]
-    );
 
-    if (rows.length === 0) {
-      return res.status(404).json({
-        error: { code: 'NOT_FOUND', message: 'No WhatsApp account configured for this organization' },
-      });
+    if (!targetPhoneId || !targetToken) {
+      const { rows } = await client.query(
+        `SELECT phone_number_id, token_encrypted FROM whatsapp_accounts WHERE org_id = $1`,
+        [orgId]
+      );
+
+      if (rows.length === 0) {
+        return res.status(404).json({
+          error: {
+            code: 'NOT_FOUND',
+            message: 'No WhatsApp account configured. Please provide phone_number_id and token to test.',
+          },
+        });
+      }
+
+      targetPhoneId = rows[0].phone_number_id;
+      targetToken = decryptToken(rows[0].token_encrypted, env.ENCRYPTION_KEY);
     }
 
-    const { phone_number_id, token_encrypted } = rows[0];
-    const plainToken = decryptToken(token_encrypted, env.ENCRYPTION_KEY);
     const waClient = new WhatsAppClient();
-    const metaInfo = await waClient.testConnection(phone_number_id, plainToken);
+    const metaInfo = await waClient.testConnection(targetPhoneId!, targetToken!);
 
-    // Update verified details in DB
+    // If an account is already linked in DB for this org, update verified details
     await client.query(
       `UPDATE whatsapp_accounts SET
         display_phone = $1, verified_name = $2, quality_rating = $3, updated_at = NOW()
@@ -235,7 +254,7 @@ router.post('/whatsapp/test', async (req: Request, res: Response) => {
     return res.json({ data: metaInfo });
   } catch (err: any) {
     return res.status(400).json({
-      error: { code: 'TEST_CONNECTION_FAILED', message: err.message },
+      error: { code: 'TEST_CONNECTION_FAILED', message: err.message || 'Meta connection test failed' },
     });
   } finally {
     if (client) client.release();

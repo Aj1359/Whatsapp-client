@@ -23,10 +23,25 @@ app.use(
   })
 );
 
-// Strict CORS: Limited to configured FRONTEND_ORIGIN only
+// Strict CORS: Configured FRONTEND_ORIGIN, Render preview domains, and local dev
+const allowedOrigins = [
+  env.FRONTEND_ORIGIN.replace(/\/$/, ''),
+  'https://wa-frontend-j187.onrender.com',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+];
+
 app.use(
   cors({
-    origin: env.FRONTEND_ORIGIN,
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const cleanOrigin = origin.replace(/\/$/, '');
+      if (allowedOrigins.includes(cleanOrigin) || cleanOrigin.endsWith('.onrender.com')) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Org-Id', 'X-Requested-With', 'Accept', 'X-Cron-Secret'],

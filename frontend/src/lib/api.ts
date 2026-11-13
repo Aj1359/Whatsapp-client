@@ -31,18 +31,37 @@ async function request<T>(path: string, options: RequestInit = {}, isFormData = 
   const url = `${API_BASE}${path}`;
   const headers = getHeaders(isFormData);
 
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      ...headers,
-      ...(options.headers || {}),
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...options,
+      headers: {
+        ...headers,
+        ...(options.headers || {}),
+      },
+    });
+  } catch (networkErr: any) {
+    throw new Error(
+      `Network error connecting to backend (${API_BASE}): ${networkErr?.message || 'Connection failed'}. If the backend is waking from sleep, please retry in a few seconds.`
+    );
+  }
 
   const json = await res.json().catch(() => null);
 
   if (!res.ok) {
-    const errorMsg = json?.error?.message || json?.error || `HTTP ${res.status}: ${res.statusText}`;
+    let errorMsg =
+      json?.error?.message ||
+      (typeof json?.error === 'string' ? json?.error : '') ||
+      json?.message;
+
+    if (!errorMsg && json?.error?.issues && Array.isArray(json.error.issues)) {
+      errorMsg = json.error.issues.map((i: any) => `${i.path?.join('.')}: ${i.message}`).join(', ');
+    }
+
+    if (!errorMsg) {
+      errorMsg = `HTTP ${res.status}: ${res.statusText}`;
+    }
+
     const err: any = new Error(errorMsg);
     err.code = json?.error?.code || 'API_ERROR';
     err.status = res.status;

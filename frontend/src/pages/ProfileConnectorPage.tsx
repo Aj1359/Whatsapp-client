@@ -52,6 +52,8 @@ export default function ProfileConnectorPage() {
 
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -68,10 +70,11 @@ export default function ProfileConnectorPage() {
   const handleTestConnection = async () => {
     setTesting(true);
     setTestResult(null);
+    setSaveError(null);
     try {
       const res = await api.settings.testWhatsApp({
-        phone_number_id: phoneId,
-        token,
+        phone_number_id: phoneId.trim(),
+        token: token.trim(),
       });
       setTestResult({
         success: true,
@@ -92,25 +95,29 @@ export default function ProfileConnectorPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaving(true);
+    setSaveError(null);
     try {
-      await api.settings.saveWhatsApp({
-        phone_number_id: phoneId,
-        waba_id: wabaId,
-        token,
-        app_secret: appSecret || undefined,
+      const res = await api.settings.saveWhatsApp({
+        phone_number_id: phoneId.trim(),
+        waba_id: wabaId.trim(),
+        token: token.trim(),
+        app_secret: appSecret.trim() || undefined,
       });
       updateWhatsAppStatusLocally({
         isConnected: true,
-        phoneNumberId: phoneId,
-        wabaId,
-        displayPhone: testResult?.display_phone || phoneId,
-        verifiedName: testResult?.verified_name || currentOrg?.name,
-        qualityRating: testResult?.quality_rating || 'GREEN',
+        phoneNumberId: phoneId.trim(),
+        wabaId: wabaId.trim(),
+        displayPhone: res?.display_phone || testResult?.display_phone || phoneId.trim(),
+        verifiedName: res?.verified_name || testResult?.verified_name || currentOrg?.name,
+        qualityRating: res?.quality_rating || testResult?.quality_rating || 'GREEN',
       });
       setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 3500);
+      setTimeout(() => setSavedSuccess(false), 4000);
     } catch (err: any) {
-      alert('Save failed: ' + err.message);
+      setSaveError(err.message || 'Failed to save credentials.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -248,8 +255,12 @@ export default function ProfileConnectorPage() {
               {testing ? 'Testing Meta Connection…' : 'Test Connection with Meta API'}
             </button>
 
-            <button type="submit" className="btn-primary text-xs px-6 py-2 shadow">
-              Save & Link to Backend
+            <button
+              type="submit"
+              disabled={saving}
+              className="btn-primary text-xs px-6 py-2 shadow flex items-center justify-center gap-2"
+            >
+              {saving ? 'Saving & Linking…' : 'Save & Link to Backend'}
             </button>
 
             {whatsAppStatus.isConnected && (
@@ -262,6 +273,21 @@ export default function ProfileConnectorPage() {
               </button>
             )}
           </div>
+
+          {/* Save feedback */}
+          {savedSuccess && (
+            <div className="p-3 rounded-xl border text-xs bg-emerald-50 border-emerald-200 text-emerald-900 flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-emerald-600" />
+              <span>Credentials saved and verified successfully! Webhook subscribed to Meta.</span>
+            </div>
+          )}
+
+          {saveError && (
+            <div className="p-3 rounded-xl border text-xs bg-red-50 border-red-200 text-red-900 flex items-center gap-2">
+              <AlertCircle size={16} className="text-red-600 shrink-0" />
+              <span>{saveError}</span>
+            </div>
+          )}
 
           {/* Test connection feedback */}
           {testResult && (
