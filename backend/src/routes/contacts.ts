@@ -31,13 +31,13 @@ router.get('/', async (req: Request, res: Response) => {
     let whereClause = `WHERE c.org_id = $1`;
     const params: any[] = [orgId];
 
-    if (status) {
+    if (status && status !== 'all') {
       params.push(status);
       whereClause += ` AND c.status = $${params.length}`;
     }
 
-    if (search) {
-      params.push(`%${search}%`);
+    if (search && search.trim()) {
+      params.push(`%${search.trim()}%`);
       whereClause += ` AND (c.name ILIKE $${params.length} OR c.whatsapp_e164 ILIKE $${params.length})`;
     }
 

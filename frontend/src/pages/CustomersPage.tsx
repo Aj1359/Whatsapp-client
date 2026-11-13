@@ -35,8 +35,15 @@ export default function CustomersPage() {
   };
 
   const refreshList = () => {
-    api.contacts.list({ search, status: statusFilter }).then((res: any) => {
-      setContacts(res.contacts ?? res);
+    const params: any = {};
+    if (search.trim()) params.search = search.trim();
+    if (statusFilter && statusFilter !== 'all') params.status = statusFilter;
+
+    api.contacts.list(params).then((res: any) => {
+      const list = Array.isArray(res) ? res : (res?.data || res?.contacts || []);
+      setContacts(list);
+    }).catch((err) => {
+      console.error('Failed to load contacts:', err);
     });
   };
 
@@ -216,10 +223,12 @@ export default function CustomersPage() {
                           <span className="text-[11px] font-bold text-emerald-700 flex items-center gap-1">
                             <Eye size={13} /> Seen ✓✓
                           </span>
-                        ) : (
+                        ) : c.last_message_status === 'delivered' ? (
                           <span className="text-[11px] text-amber-700 flex items-center gap-1">
                             <EyeOff size={13} /> Delivered
                           </span>
+                        ) : (
+                          <span className="text-[11px] text-gray-400">—</span>
                         )}
                       </td>
                       <td className="py-3.5 px-4 text-right">

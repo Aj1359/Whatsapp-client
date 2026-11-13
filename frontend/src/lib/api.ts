@@ -115,8 +115,8 @@ export const api = {
   contacts: {
     list: (params?: { search?: string; status?: string; list_id?: number; page?: number; limit?: number }) => {
       const q = new URLSearchParams();
-      if (params?.search) q.set('search', params.search);
-      if (params?.status) q.set('status', params.status);
+      if (params?.search && params.search.trim()) q.set('search', params.search.trim());
+      if (params?.status && params.status !== 'all') q.set('status', params.status);
       if (params?.list_id) q.set('list_id', String(params.list_id));
       if (params?.page) q.set('page', String(params.page));
       if (params?.limit) q.set('limit', String(params.limit));
