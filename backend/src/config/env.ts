@@ -7,16 +7,7 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   SUPABASE_JWKS_URL: z.string().url().optional(),
-  ENCRYPTION_KEY: z.string().refine((val) => {
-    try {
-      const buf = Buffer.from(val, 'base64');
-      return buf.length === 32;
-    } catch {
-      return false;
-    }
-  }, {
-    message: 'ENCRYPTION_KEY must be a valid 32-byte base64-encoded string',
-  }),
+  ENCRYPTION_KEY: z.string().min(1, 'ENCRYPTION_KEY is required'),
   META_APP_ID: z.string().min(1),
   META_APP_SECRET: z.string().min(1),
   WEBHOOK_VERIFY_TOKEN: z.string().min(1),

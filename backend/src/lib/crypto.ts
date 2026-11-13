@@ -1,22 +1,36 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'crypto';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
 
 /**
- * Validates and retrieves the 32-byte key from base64 representation.
- * Throws if the key is not exactly 32 bytes.
+ * Validates and retrieves the 32-byte key:
+ * Supports 32-byte base64 string, 64-character hex, or 32-character utf-8.
+ * Throws if the resolved key is not exactly 32 bytes.
  */
-function getValidKey(base64Key: string): Buffer {
-  if (!base64Key) {
+function getValidKey(keyInput: string): Buffer {
+  if (!keyInput) {
     throw new Error('ENCRYPTION_KEY is required and cannot be empty');
   }
-  const key = Buffer.from(base64Key, 'base64');
-  if (key.length !== 32) {
-    throw new Error('ENCRYPTION_KEY must be exactly 32 bytes when base64-decoded');
+  const trimmed = keyInput.trim();
+
+  // 1. Try 32-byte base64
+  try {
+    const key = Buffer.from(trimmed, 'base64');
+    if (key.length === 32) return key;
+  } catch {}
+
+  // 2. Try 64-character hex
+  if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+    return Buffer.from(trimmed, 'hex');
   }
-  return key;
+
+  // 3. Try 32-byte raw utf-8 string
+  const raw = Buffer.from(trimmed, 'utf8');
+  if (raw.length === 32) return raw;
+
+  throw new Error('ENCRYPTION_KEY must be exactly 32 bytes (as base64, hex, or utf-8)');
 }
 
 /**
