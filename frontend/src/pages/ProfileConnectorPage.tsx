@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { api } from '../lib/api';
+import { api, API_BASE } from '../lib/api';
 import {
   Smartphone,
   ShieldCheck,
@@ -57,9 +57,7 @@ export default function ProfileConnectorPage() {
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const webhookUrl = import.meta.env.VITE_API_URL
-    ? `${import.meta.env.VITE_API_URL}/webhooks/whatsapp`
-    : 'https://wa-backend-ayta.onrender.com/webhooks/whatsapp';
+  const webhookUrl = `${API_BASE}/webhooks/whatsapp`;
 
   const copyWebhookUrl = () => {
     navigator.clipboard.writeText(webhookUrl);

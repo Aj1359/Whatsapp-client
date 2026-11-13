@@ -6,7 +6,16 @@
  * - Strictly zero mock fallbacks, zero demo-tokens, zero fabricated localStorage stats
  */
 
-const API_BASE: string = import.meta.env.VITE_API_URL || 'https://wa-backend-ayta.onrender.com';
+function resolveApiBase(): string {
+  const envUrl = (import.meta.env.VITE_API_URL || '').trim();
+  // Auto-correct Render missing suffix or empty value
+  if (!envUrl || envUrl === 'https://wa-backend.onrender.com' || envUrl === 'http://wa-backend.onrender.com') {
+    return 'https://wa-backend-ayta.onrender.com';
+  }
+  return envUrl.replace(/\/$/, '');
+}
+
+export const API_BASE: string = resolveApiBase();
 
 function getHeaders(isFormData = false): HeadersInit {
   const token = localStorage.getItem('sb-token') || '';

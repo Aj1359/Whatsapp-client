@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../lib/api';
+import { api, API_BASE } from '../lib/api';
 import {
   MessageSquare,
   Search,
@@ -53,7 +53,7 @@ export default function RepliesChatPage() {
   const fetchThread = async (contactId: number) => {
     try {
       setThreadLoading(true);
-      const res: any = await fetch(`${import.meta.env.VITE_API_URL || 'https://wa-backend-ayta.onrender.com'}/api/replies/${contactId}`, {
+      const res: any = await fetch(`${API_BASE}/api/replies/${contactId}`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('sb-token') || ''}`,
           'X-Org-Id': localStorage.getItem('active-org-id') || '',
@@ -83,7 +83,7 @@ export default function RepliesChatPage() {
     setSending(true);
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_API_URL || 'https://wa-backend-ayta.onrender.com'}/api/replies/${selectedContactId}/send`,
+        `${API_BASE}/api/replies/${selectedContactId}/send`,
         {
           method: 'POST',
           headers: {
@@ -119,7 +119,7 @@ export default function RepliesChatPage() {
   const handleMarkHandled = async (inquiryId: number) => {
     try {
       await fetch(
-        `${import.meta.env.VITE_API_URL || 'https://wa-backend-ayta.onrender.com'}/api/replies/${inquiryId}/handled`,
+        `${API_BASE}/api/replies/${inquiryId}/handled`,
         {
           method: 'POST',
           headers: {
