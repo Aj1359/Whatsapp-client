@@ -19,6 +19,8 @@ import {
   AlertCircle,
   Users,
   Play,
+  Video,
+  FileText,
 } from 'lucide-react';
 
 interface MetaTemplate {
@@ -27,7 +29,7 @@ interface MetaTemplate {
   category?: string;
   status?: string;
   body?: string;
-  header_type?: 'none' | 'image' | 'text';
+  header_type?: 'none' | 'image' | 'video' | 'document' | 'text';
   header_url?: string;
   id?: string;
 }
@@ -118,7 +120,15 @@ export default function PostsTemplatesPage() {
           let bodyText = '';
           const bodyComp = (t.components || []).find((c: any) => c.type === 'BODY');
           if (bodyComp) bodyText = bodyComp.text || '';
-          const hasHeader = (t.components || []).some((c: any) => c.type === 'HEADER');
+          
+          const headerComp = (t.components || []).find((c: any) => c.type === 'HEADER');
+          const headerFormat = (headerComp?.format || t.header_format || t.header_type || '').toLowerCase();
+          let headerType: 'none' | 'image' | 'video' | 'document' | 'text' = 'none';
+          if (headerFormat === 'video') headerType = 'video';
+          else if (headerFormat === 'document') headerType = 'document';
+          else if (headerFormat === 'image') headerType = 'image';
+          else if (headerFormat === 'text') headerType = 'text';
+
           const existing = templates.find((cur) => cur.name === t.name);
           return {
             name: t.name,
@@ -126,8 +136,8 @@ export default function PostsTemplatesPage() {
             category: t.category || 'MARKETING',
             status: t.status || 'APPROVED',
             body: bodyText || `Meta template: ${t.name}`,
-            header_type: hasHeader ? 'image' : 'none',
-            header_url: existing?.header_url || (hasHeader ? 'https://images.unsplash.com/photo-1579208575657-c595a05383b7?w=800' : undefined),
+            header_type: headerType,
+            header_url: existing?.header_url || (headerType === 'image' ? 'https://images.unsplash.com/photo-1579208575657-c595a05383b7?w=800' : undefined),
           };
         });
 
@@ -282,7 +292,17 @@ export default function PostsTemplatesPage() {
 
                   {/* Message Bubble Preview */}
                   <div className="bg-[#ECE5DD] p-3 rounded-xl border border-gray-300 text-xs text-gray-800 leading-relaxed max-h-44 overflow-y-auto whitespace-pre-line shadow-inner space-y-2">
-                    {t.header_type === 'image' && (
+                    {t.header_type === 'video' ? (
+                      <div className="bg-gray-900 rounded-lg p-3 text-center text-white flex flex-col items-center justify-center gap-1 min-h-[70px]">
+                        <Video size={20} className="text-emerald-400" />
+                        <span className="text-[10px] font-semibold">Video Header Template</span>
+                      </div>
+                    ) : t.header_type === 'document' ? (
+                      <div className="bg-gray-100 border border-gray-300 rounded-lg p-3 text-center text-gray-700 flex flex-col items-center justify-center gap-1 min-h-[70px]">
+                        <FileText size={20} className="text-emerald-600" />
+                        <span className="text-[10px] font-semibold">PDF Document Header Template</span>
+                      </div>
+                    ) : t.header_type === 'image' && (
                       <div className="relative group">
                         {t.header_url ? (
                           <img

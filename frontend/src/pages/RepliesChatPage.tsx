@@ -12,6 +12,11 @@ import {
   Forward,
   ShieldCheck,
   Check,
+  Paperclip,
+  FileText,
+  Video,
+  Image as ImageIcon,
+  X,
 } from 'lucide-react';
 
 export default function RepliesChatPage() {
@@ -19,6 +24,7 @@ export default function RepliesChatPage() {
   const [selectedContactId, setSelectedContactId] = useState<number | null>(null);
   const [threadData, setThreadData] = useState<any>(null);
   const [replyText, setReplyText] = useState('');
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [threadLoading, setThreadLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -78,22 +84,38 @@ export default function RepliesChatPage() {
 
   const handleSendReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!replyText.trim() || !selectedContactId) return;
+    if ((!replyText.trim() && !attachedFile) || !selectedContactId) return;
 
     setSending(true);
     try {
-      const res = await fetch(
-        `${API_BASE}/api/replies/${selectedContactId}/send`,
-        {
+      let res: Response;
+      if (attachedFile) {
+        const fd = new FormData();
+        fd.append('file', attachedFile);
+        if (replyText.trim()) fd.append('text', replyText.trim());
+
+        res = await fetch(`${API_BASE}/api/replies/${selectedContactId}/send`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
             Authorization: `Bearer ${localStorage.getItem('sb-token') || ''}`,
             'X-Org-Id': localStorage.getItem('active-org-id') || '',
           },
-          body: JSON.stringify({ text: replyText.trim() }),
-        }
-      );
+          body: fd,
+        });
+      } else {
+        res = await fetch(
+          `${API_BASE}/api/replies/${selectedContactId}/send`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${localStorage.getItem('sb-token') || ''}`,
+              'X-Org-Id': localStorage.getItem('active-org-id') || '',
+            },
+            body: JSON.stringify({ text: replyText.trim() }),
+          }
+        );
+      }
 
       const json = await res.json();
       if (!res.ok) {
@@ -105,6 +127,7 @@ export default function RepliesChatPage() {
       }
 
       setReplyText('');
+      setAttachedFile(null);
       fetchThread(selectedContactId);
       setNotification({ msg: 'Reply dispatched to customer!', type: 'success' });
       setTimeout(() => setNotification(null), 3000);
@@ -318,12 +341,52 @@ export default function RepliesChatPage() {
             </div>
 
             {/* Input Bar */}
-            <div className="p-4 border-t border-gray-200 bg-white">
+            <div className="p-4 border-t border-gray-200 bg-white space-y-2">
+              {attachedFile && (
+                <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs px-3 py-1.5 rounded-lg shadow-sm">
+                  {attachedFile.type.startsWith('video/') ? (
+                    <Video size={14} className="text-emerald-700" />
+                  ) : attachedFile.type.startsWith('image/') ? (
+                    <ImageIcon size={14} className="text-emerald-700" />
+                  ) : (
+                    <FileText size={14} className="text-emerald-700" />
+                  )}
+                  <span className="font-semibold truncate max-w-xs">{attachedFile.name}</span>
+                  <span className="text-[10px] text-gray-500 font-mono">
+                    ({(attachedFile.size / (1024 * 1024)).toFixed(2)} MB)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAttachedFile(null)}
+                    className="text-gray-400 hover:text-red-600 transition ml-1"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+
               {threadData.is_window_open ? (
                 <form onSubmit={handleSendReply} className="flex items-center gap-2">
+                  <label
+                    className="p-2.5 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl cursor-pointer border border-gray-200 transition"
+                    title="Attach Image, Video, or Document (PDF)"
+                  >
+                    <Paperclip size={16} />
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*,video/*,application/pdf,.doc,.docx,.xlsx,.csv"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          setAttachedFile(e.target.files[0]);
+                        }
+                      }}
+                    />
+                  </label>
+
                   <input
                     type="text"
-                    placeholder="Type your WhatsApp follow-up response..."
+                    placeholder={attachedFile ? 'Add a caption for this media...' : 'Type your WhatsApp follow-up response...'}
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
                     className="flex-1 py-2.5 px-4 text-xs border border-gray-300 rounded-xl outline-none focus:ring-2 focus:ring-emerald-700"
@@ -331,10 +394,10 @@ export default function RepliesChatPage() {
                   />
                   <button
                     type="submit"
-                    disabled={sending || !replyText.trim()}
+                    disabled={sending || (!replyText.trim() && !attachedFile)}
                     className="btn-primary text-xs px-5 py-2.5 flex items-center gap-1.5 shadow"
                   >
-                    <Send size={14} /> Send Reply
+                    <Send size={14} /> Send
                   </button>
                 </form>
               ) : (

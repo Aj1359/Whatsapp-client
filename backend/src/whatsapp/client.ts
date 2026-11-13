@@ -259,15 +259,21 @@ export class WhatsAppClient {
 
   /**
    * 8. sendFreeForm
-   * POST /{phone-number-id}/messages with type text or image
+   * POST /{phone-number-id}/messages with type text, image, video, document, or audio
    * Only if contact messaged within last 24 hours (check inbound_messages)
    */
   async sendFreeForm(
     phoneNumberId: string,
     token: string,
     to: string,
-    type: 'text' | 'image',
-    payload: { text?: string; mediaId?: string; caption?: string }
+    type: 'text' | 'image' | 'video' | 'document' | 'audio',
+    payload: {
+      text?: string;
+      mediaId?: string;
+      link?: string;
+      caption?: string;
+      filename?: string;
+    }
   ) {
     const cleanedTo = to.replace(/^\+/, '');
     const url = `${this.base}/${phoneNumberId}/messages`;
@@ -281,7 +287,21 @@ export class WhatsAppClient {
     if (type === 'text') {
       body.text = { body: payload.text ?? '', preview_url: false };
     } else if (type === 'image') {
-      body.image = { id: payload.mediaId, caption: payload.caption };
+      body.image = payload.mediaId
+        ? { id: payload.mediaId, caption: payload.caption }
+        : { link: payload.link, caption: payload.caption };
+    } else if (type === 'video') {
+      body.video = payload.mediaId
+        ? { id: payload.mediaId, caption: payload.caption }
+        : { link: payload.link, caption: payload.caption };
+    } else if (type === 'document') {
+      body.document = payload.mediaId
+        ? { id: payload.mediaId, caption: payload.caption, filename: payload.filename || 'document.pdf' }
+        : { link: payload.link, caption: payload.caption, filename: payload.filename || 'document.pdf' };
+    } else if (type === 'audio') {
+      body.audio = payload.mediaId
+        ? { id: payload.mediaId }
+        : { link: payload.link };
     }
 
     const res = await fetch(url, {

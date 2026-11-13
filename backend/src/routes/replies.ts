@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import multer from 'multer';
 import { z } from 'zod';
 import { pool } from '../db/pool.js';
 import { WhatsAppClient } from '../whatsapp/client.js';
@@ -9,6 +10,11 @@ import { getOrgId } from './settings.js';
 
 const router = Router();
 router.use(requireAuth);
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit for Video, PDF documents, and Images
+});
 
 const waClient = new WhatsAppClient();
 
@@ -142,15 +148,20 @@ router.get('/:contactId', async (req: Request, res: Response) => {
 
 /**
  * POST /api/replies/:contactId/send
- * Sends 1-on-1 free-form message in thread. Enforces 24-hour window.
+ * Sends 1-on-1 free-form message in thread (Text, Image, Video, Document).
+ * Enforces 24-hour window.
  */
-router.post('/:contactId/send', async (req: Request, res: Response) => {
+router.post('/:contactId/send', upload.any(), async (req: Request, res: Response) => {
   const orgId = getOrgId(req);
   const contactId = parseInt(req.params.contactId, 10);
-  const { text } = req.body;
+  const { text, type: requestedType, media_url } = req.body;
 
-  if (!text || typeof text !== 'string' || !text.trim()) {
-    return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Message text is required' } });
+  const uploadedFile = (req.files && Array.isArray(req.files) && req.files.length > 0)
+    ? (req.files as Express.Multer.File[])[0]
+    : req.file;
+
+  if ((!text || !text.trim()) && !uploadedFile && !media_url) {
+    return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Message text or media is required' } });
   }
 
   let client;
@@ -197,16 +208,46 @@ router.post('/:contactId/send', async (req: Request, res: Response) => {
     const token = decryptToken(token_encrypted, env.ENCRYPTION_KEY);
 
     const clientToUse = new WhatsAppClient(graph_version || 'v21.0');
-    const sendRes = await clientToUse.sendFreeForm(phone_number_id, token, to, 'text', { text: text.trim() });
 
+    let msgType: 'text' | 'image' | 'video' | 'document' = 'text';
+    let mediaId: string | undefined = undefined;
+
+    if (uploadedFile) {
+      const mime = uploadedFile.mimetype.toLowerCase();
+      if (mime.startsWith('image/')) msgType = 'image';
+      else if (mime.startsWith('video/')) msgType = 'video';
+      else msgType = 'document';
+
+      const upRes = await clientToUse.uploadMedia(
+        phone_number_id,
+        token,
+        uploadedFile.buffer,
+        uploadedFile.mimetype,
+        uploadedFile.originalname || (msgType === 'document' ? 'document.pdf' : 'media')
+      );
+      mediaId = upRes.mediaId;
+    } else if (media_url) {
+      msgType = (requestedType || 'image') as any;
+    }
+
+    const payload: any = {
+      text: text?.trim() || '',
+      caption: text?.trim() || undefined,
+      mediaId,
+      link: media_url || undefined,
+      filename: uploadedFile?.originalname || 'document.pdf',
+    };
+
+    const sendRes = await clientToUse.sendFreeForm(phone_number_id, token, to, msgType, payload);
     const waMsgId = sendRes.wa_message_id || null;
 
     // 4. Save into outbound_replies
+    const displayBody = text?.trim() || `[${msgType.toUpperCase()}${uploadedFile?.originalname ? `: ${uploadedFile.originalname}` : ''}]`;
     const { rows: outRows } = await client.query(
       `INSERT INTO outbound_replies (org_id, contact_id, to_e164, body, wa_message_id, status, sent_at)
        VALUES ($1, $2, $3, $4, $5, 'sent', NOW())
        RETURNING *`,
-      [orgId, contactId, to, text.trim(), waMsgId]
+      [orgId, contactId, to, displayBody, waMsgId]
     );
 
     return res.status(201).json({ data: outRows[0] });

@@ -15,7 +15,7 @@ router.use(requireAuth);
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB image limit
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit for Video, PDF documents, and Images
 });
 
 // ── GET /api/campaigns ───────────────────────────────────────────────────────
@@ -175,7 +175,7 @@ router.get('/:id/messages', async (req: Request, res: Response) => {
 });
 
 // ── POST /api/campaigns (Create Campaign + Queue Messages) ───────────────────
-router.post('/', upload.single('header_image'), async (req: Request, res: Response) => {
+router.post('/', upload.any(), async (req: Request, res: Response) => {
   const orgId = getOrgId(req);
 
   const {
@@ -249,23 +249,27 @@ router.post('/', upload.single('header_image'), async (req: Request, res: Respon
       });
     }
 
-    // 3. Upload Header Image to Meta (Once per campaign) if provided
+    // 3. Upload Header Media (Image, Video, Document) to Meta if provided
     let mediaId: string | null = null;
-    if (req.file) {
+    const uploadedFile = (req.files && Array.isArray(req.files) && req.files.length > 0)
+      ? (req.files as Express.Multer.File[])[0]
+      : req.file;
+
+    if (uploadedFile) {
       const waClient = new WhatsAppClient(graph_version || 'v21.0');
       try {
         const upRes = await waClient.uploadMedia(
           phone_number_id,
           token,
-          req.file.buffer,
-          req.file.mimetype,
-          req.file.originalname || 'header.jpg'
+          uploadedFile.buffer,
+          uploadedFile.mimetype,
+          uploadedFile.originalname || 'media.bin'
         );
         mediaId = upRes.mediaId;
       } catch (mediaErr: any) {
         await client.query('ROLLBACK');
         return res.status(400).json({
-          error: { code: 'MEDIA_UPLOAD_FAILED', message: `Failed to upload header image to Meta: ${mediaErr.message}` },
+          error: { code: 'MEDIA_UPLOAD_FAILED', message: `Failed to upload header media to Meta: ${mediaErr.message}` },
         });
       }
     }

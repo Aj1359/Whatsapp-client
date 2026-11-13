@@ -56,6 +56,7 @@ export async function processSendingBatch(): Promise<number> {
              c.name as contact_name, c.whatsapp_e164,
              camp.name as campaign_name, camp.template_id, camp.media_id, camp.variables as campaign_vars,
              t.name as template_name, t.language as template_language, t.components as template_components,
+             t.header_type, t.header_format,
              s.send_rate_per_sec,
              wa.phone_number_id, wa.token_encrypted, wa.graph_version
       FROM messages m
@@ -123,17 +124,40 @@ export async function processSendingBatch(): Promise<number> {
       // Prepare components: Image Header + Dynamic Variables
       const components: any[] = [];
 
-      // 1. Header Media
+      // 1. Header Media (supports Image, Video, Document)
       if (msg.media_id) {
-        components.push({
-          type: 'header',
-          parameters: [
-            {
-              type: 'image',
-              image: { id: msg.media_id },
-            },
-          ],
-        });
+        const hType = (msg.header_type || msg.header_format || 'image').toLowerCase();
+        if (hType === 'video') {
+          components.push({
+            type: 'header',
+            parameters: [
+              {
+                type: 'video',
+                video: { id: msg.media_id },
+              },
+            ],
+          });
+        } else if (hType === 'document') {
+          components.push({
+            type: 'header',
+            parameters: [
+              {
+                type: 'document',
+                document: { id: msg.media_id, filename: 'document.pdf' },
+              },
+            ],
+          });
+        } else {
+          components.push({
+            type: 'header',
+            parameters: [
+              {
+                type: 'image',
+                image: { id: msg.media_id },
+              },
+            ],
+          });
+        }
       }
 
       // 2. Body Parameters: Resolve {{name}}, {{first_name}}
