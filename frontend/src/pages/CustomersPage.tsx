@@ -25,6 +25,10 @@ export default function CustomersPage() {
   const [contacts, setContacts] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -35,21 +39,30 @@ export default function CustomersPage() {
   };
 
   const refreshList = () => {
-    const params: any = {};
+    setLoading(true);
+    const params: any = { page, limit };
     if (search.trim()) params.search = search.trim();
     if (statusFilter && statusFilter !== 'all') params.status = statusFilter;
 
     api.contacts.list(params).then((res: any) => {
-      const list = Array.isArray(res) ? res : (res?.data || res?.contacts || []);
+      const list = res?.data ?? (Array.isArray(res) ? res : []);
+      const total = typeof res?.total === 'number' ? res.total : list.length;
       setContacts(list);
+      setTotalCount(total);
     }).catch((err) => {
       console.error('Failed to load contacts:', err);
+    }).finally(() => {
+      setLoading(false);
     });
   };
 
   useEffect(() => {
-    refreshList();
+    setPage(1);
   }, [search, statusFilter]);
+
+  useEffect(() => {
+    refreshList();
+  }, [search, statusFilter, page, limit]);
 
   const isActive = (c: any) => c.status === 'active' || (c.is_active !== false && c.status !== 'opted_out');
   const activeCount = contacts.filter(isActive).length;
@@ -120,7 +133,7 @@ export default function CustomersPage() {
           </div>
         </div>
         <div className="hidden lg:flex items-center gap-2 text-xs font-bold text-emerald-900">
-          <span>Active Customers: {activeCount}</span>
+          <span>Total Database Contacts: {totalCount}</span>
         </div>
       </div>
 
@@ -144,8 +157,8 @@ export default function CustomersPage() {
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
-            <option value="all">All Customers ({contacts.length})</option>
-            <option value="active">Active Only ({activeCount})</option>
+            <option value="all">All Contacts ({totalCount})</option>
+            <option value="active">Active Only ({totalCount})</option>
             <option value="opted_out">Opted Out (STOP)</option>
           </select>
 
@@ -259,6 +272,53 @@ export default function CustomersPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Bar */}
+        {totalCount > 0 && (
+          <div className="bg-white border-t border-gray-100 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-600">
+            <div className="flex items-center gap-2">
+              <span>
+                Showing <strong>{(page - 1) * limit + 1}</strong> to <strong>{Math.min(page * limit, totalCount)}</strong> of <strong>{totalCount}</strong> contacts
+              </span>
+              <span className="text-gray-300">|</span>
+              <div className="flex items-center gap-1.5">
+                <span>Per page:</span>
+                <select
+                  value={limit}
+                  onChange={(e) => {
+                    setLimit(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="border border-gray-200 rounded px-2 py-0.5 text-xs bg-gray-50 focus:ring-1 focus:ring-emerald-600 outline-none"
+                >
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={200}>200</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1 || loading}
+                className="btn-secondary px-3 py-1 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                &larr; Previous
+              </button>
+              <span className="px-2 font-semibold text-gray-700">
+                Page {page} of {Math.max(1, Math.ceil(totalCount / limit))}
+              </span>
+              <button
+                onClick={() => setPage((p) => (p * limit < totalCount ? p + 1 : p))}
+                disabled={page * limit >= totalCount || loading}
+                className="btn-secondary px-3 py-1 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Next &rarr;
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add / Update Modal */}

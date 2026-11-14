@@ -89,19 +89,28 @@ export default function PostsTemplatesPage() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  useEffect(() => {
-    // Load active contacts for broadcast targeting
-    api.contacts.list({ status: 'active' }).then((res: any) => {
-      const list = res.contacts ?? res ?? [];
+  const loadAudience = () => {
+    // Load ALL active contacts for broadcast targeting (full database audience)
+    api.contacts.selectable().then((res: any) => {
+      const list = res?.data ?? (Array.isArray(res) ? res : []);
       setActiveCustomers(list);
-    });
+    }).catch(() => {});
+  };
+
+  useEffect(() => {
+    loadAudience();
   }, []);
 
   useEffect(() => {
-    api.templates.list().then((list) => {
-      if (Array.isArray(list) && list.length > 0) {
-        setTemplates(list);
-      }
+    if (showBroadcastModal) {
+      loadAudience();
+    }
+  }, [showBroadcastModal]);
+
+  useEffect(() => {
+    api.templates.list().then((list: any) => {
+      const rows = list?.data ?? (Array.isArray(list) ? list : []);
+      setTemplates(rows);
     }).catch(() => {});
   }, []);
 

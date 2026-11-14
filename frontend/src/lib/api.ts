@@ -36,7 +36,7 @@ function getHeaders(isFormData = false): HeadersInit {
   return headers;
 }
 
-async function request<T>(path: string, options: RequestInit = {}, isFormData = false): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}, isFormData = false, keepEnvelope = false): Promise<T> {
   const url = `${API_BASE}${path}`;
   const headers = getHeaders(isFormData);
 
@@ -75,6 +75,10 @@ async function request<T>(path: string, options: RequestInit = {}, isFormData = 
     err.code = json?.error?.code || 'API_ERROR';
     err.status = res.status;
     throw err;
+  }
+
+  if (keepEnvelope) {
+    return json as T;
   }
 
   return (json?.data !== undefined ? json.data : json) as T;
@@ -120,10 +124,20 @@ export const api = {
       if (params?.list_id) q.set('list_id', String(params.list_id));
       if (params?.page) q.set('page', String(params.page));
       if (params?.limit) q.set('limit', String(params.limit));
-      return request<{ data: any[]; total: number; page: number; limit: number }>(`/api/contacts?${q.toString()}`);
+      return request<{ data: any[]; total: number; page: number; limit: number }>(
+        `/api/contacts?${q.toString()}`,
+        {},
+        false,
+        true
+      );
     },
     selectable: (listId?: number) =>
-      request<{ data: any[]; total: number }>(`/api/contacts/selectable${listId ? `?list_id=${listId}` : ''}`),
+      request<{ data: any[]; total: number }>(
+        `/api/contacts/selectable${listId ? `?list_id=${listId}` : ''}`,
+        {},
+        false,
+        true
+      ),
     create: (data: { name: string; phone: string; email?: string; consent_confirmed: boolean; opt_in_source?: string; list_ids?: number[] }) =>
       request<any>('/api/contacts', { method: 'POST', body: JSON.stringify(data) }),
     import: (formData: FormData) =>

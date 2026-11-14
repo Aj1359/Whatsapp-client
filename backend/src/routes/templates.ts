@@ -34,6 +34,36 @@ export async function syncTemplatesForOrg(orgId: string): Promise<{ synced: numb
     const metaTemplates = await waClient.listTemplates(waba_id, plainToken);
     let count = 0;
 
+    // Prune templates that were deleted from Meta
+    const metaKeys = metaTemplates.map((mt: any) => `${mt.name}:::${mt.language || 'en'}`);
+    if (metaKeys.length > 0) {
+      await client.query(`
+        DELETE FROM templates
+        WHERE org_id = $1
+          AND CONCAT(name, ':::', language) != ALL($2::text[])
+          AND id NOT IN (SELECT template_id FROM campaigns WHERE org_id = $1)
+      `, [orgId, metaKeys]);
+
+      await client.query(`
+        UPDATE templates
+        SET status = 'deleted', updated_at = NOW()
+        WHERE org_id = $1
+          AND CONCAT(name, ':::', language) != ALL($2::text[])
+      `, [orgId, metaKeys]);
+    } else {
+      await client.query(`
+        DELETE FROM templates
+        WHERE org_id = $1
+          AND id NOT IN (SELECT template_id FROM campaigns WHERE org_id = $1)
+      `, [orgId]);
+
+      await client.query(`
+        UPDATE templates
+        SET status = 'deleted', updated_at = NOW()
+        WHERE org_id = $1
+      `, [orgId]);
+    }
+
     for (const mt of metaTemplates) {
       const name = mt.name;
       const language = mt.language || 'en';
@@ -141,7 +171,7 @@ router.get('/', async (req: Request, res: Response) => {
               body, variable_names, footer, meta_template_id, status,
               rejection_reason, components, created_at, updated_at
        FROM templates
-       WHERE org_id = $1
+       WHERE org_id = $1 AND status != 'deleted'
        ORDER BY name ASC, language ASC`,
       [orgId]
     );

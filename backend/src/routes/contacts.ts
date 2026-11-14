@@ -21,7 +21,7 @@ router.get('/', async (req: Request, res: Response) => {
   const orgId = getOrgId(req);
   const { search, status, list_id, page = '1', limit = '50' } = req.query as Record<string, string>;
   const pageNum = Math.max(1, parseInt(page, 10));
-  const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10)));
+  const limitNum = Math.min(500, Math.max(1, parseInt(limit, 10)));
   const offset = (pageNum - 1) * limitNum;
 
   let client;
