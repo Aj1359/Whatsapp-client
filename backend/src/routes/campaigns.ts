@@ -242,7 +242,7 @@ router.post('/', upload.any(), async (req: Request, res: Response) => {
     }
 
     const template = tRows[0];
-    if (template.status !== 'approved') {
+    if (template.status?.toLowerCase() !== 'approved') {
       await client.query('ROLLBACK');
       return res.status(400).json({
         error: { code: 'TEMPLATE_NOT_APPROVED', message: `Template status is '${template.status}'. Only 'approved' templates can be broadcast.` },

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import {
@@ -21,6 +21,9 @@ import {
   Play,
   Video,
   FileText,
+  Search,
+  UserCheck,
+  UserX,
 } from 'lucide-react';
 
 interface MetaTemplate {
@@ -32,6 +35,36 @@ interface MetaTemplate {
   header_type?: 'none' | 'image' | 'video' | 'document' | 'text';
   header_url?: string;
   id?: string;
+  components?: any[];
+}
+
+function formatTemplate(t: any, existingTemplates: MetaTemplate[] = []): MetaTemplate {
+  let bodyText = '';
+  const bodyComp = (t.components || []).find((c: any) => c.type === 'BODY');
+  if (bodyComp) bodyText = bodyComp.text || '';
+
+  const headerComp = (t.components || []).find((c: any) => c.type === 'HEADER');
+  const headerFormat = (headerComp?.format || t.header_format || t.header_type || '').toLowerCase();
+  let headerType: 'none' | 'image' | 'video' | 'document' | 'text' = 'none';
+  if (headerFormat === 'video') headerType = 'video';
+  else if (headerFormat === 'document') headerType = 'document';
+  else if (headerFormat === 'image') headerType = 'image';
+  else if (headerFormat === 'text') headerType = 'text';
+
+  const existing = existingTemplates.find((cur) => cur.name === t.name);
+  const normalizedStatus = (t.status || 'APPROVED').toUpperCase();
+
+  return {
+    id: String(t.id || ''),
+    name: t.name,
+    language: t.language || 'en',
+    category: (t.category || 'MARKETING').toUpperCase(),
+    status: normalizedStatus,
+    body: bodyText || t.body || `Meta template: ${t.name}`,
+    header_type: headerType,
+    header_url: existing?.header_url || t.header_url || (headerType === 'image' ? 'https://images.unsplash.com/photo-1579208575657-c595a05383b7?w=800' : undefined),
+    components: t.components || [],
+  };
 }
 
 interface BroadcastHistory {
@@ -107,11 +140,18 @@ export default function PostsTemplatesPage() {
     }
   }, [showBroadcastModal]);
 
+  const loadTemplates = async () => {
+    try {
+      const res = await api.templates.list();
+      const list = (res as any)?.data ?? (Array.isArray(res) ? res : []);
+      if (Array.isArray(list) && list.length > 0) {
+        setTemplates((prev) => list.map((t: any) => formatTemplate(t, prev)));
+      }
+    } catch {}
+  };
+
   useEffect(() => {
-    api.templates.list().then((list: any) => {
-      const rows = list?.data ?? (Array.isArray(list) ? list : []);
-      setTemplates(rows);
-    }).catch(() => {});
+    loadTemplates();
   }, []);
 
   const handleSaveTemplates = (newTemplates: MetaTemplate[]) => {
@@ -122,41 +162,10 @@ export default function PostsTemplatesPage() {
     setSyncing(true);
     try {
       await api.templates.sync();
-      const remoteList = await api.templates.list();
-
-      if (Array.isArray(remoteList) && remoteList.length > 0) {
-        const formatted: MetaTemplate[] = remoteList.map((t: any) => {
-          let bodyText = '';
-          const bodyComp = (t.components || []).find((c: any) => c.type === 'BODY');
-          if (bodyComp) bodyText = bodyComp.text || '';
-          
-          const headerComp = (t.components || []).find((c: any) => c.type === 'HEADER');
-          const headerFormat = (headerComp?.format || t.header_format || t.header_type || '').toLowerCase();
-          let headerType: 'none' | 'image' | 'video' | 'document' | 'text' = 'none';
-          if (headerFormat === 'video') headerType = 'video';
-          else if (headerFormat === 'document') headerType = 'document';
-          else if (headerFormat === 'image') headerType = 'image';
-          else if (headerFormat === 'text') headerType = 'text';
-
-          const existing = templates.find((cur) => cur.name === t.name);
-          return {
-            name: t.name,
-            language: t.language || 'en',
-            category: t.category || 'MARKETING',
-            status: t.status || 'APPROVED',
-            body: bodyText || `Meta template: ${t.name}`,
-            header_type: headerType,
-            header_url: existing?.header_url || (headerType === 'image' ? 'https://images.unsplash.com/photo-1579208575657-c595a05383b7?w=800' : undefined),
-          };
-        });
-
-        handleSaveTemplates(formatted);
-        showToast(`Synced ${formatted.length} templates directly from Meta!`);
-      } else {
-        showToast('No templates returned from Meta. You can connect your template by name below.', 'error');
-      }
+      await loadTemplates();
+      showToast('Templates synced directly from Meta!');
     } catch (err: any) {
-      showToast(`Meta Sync: ${err.message}. You can connect your template by name below.`, 'error');
+      showToast(`Meta Sync: ${err.message}.`, 'error');
     } finally {
       setSyncing(false);
     }
@@ -283,9 +292,13 @@ export default function PostsTemplatesPage() {
                     <span className="font-mono font-bold text-xs text-gray-900 bg-gray-100 px-2 py-1 rounded">
                       {t.name}
                     </span>
-                    {t.status === 'APPROVED' ? (
-                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                    {t.status?.toUpperCase() === 'APPROVED' ? (
+                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full flex items-center gap-1">
                         <Check size={11} /> APPROVED
+                      </span>
+                    ) : t.status?.toUpperCase() === 'REJECTED' ? (
+                      <span className="text-[10px] font-bold text-red-800 bg-red-100 border border-red-300 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                        <AlertCircle size={11} /> REJECTED
                       </span>
                     ) : (
                       <span className="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full flex items-center gap-1" title="Meta is still reviewing this template. Messages cannot be sent until approved.">
@@ -698,7 +711,7 @@ function TestSendModal({
           </button>
         </div>
 
-        {template.status !== 'APPROVED' && (
+        {template.status?.toUpperCase() !== 'APPROVED' && (
           <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 text-xs flex items-center gap-2">
             <Clock size={16} className="shrink-0 text-amber-600" />
             <div>
@@ -756,7 +769,7 @@ function TestSendModal({
   );
 }
 
-// ── Bulk Broadcast Modal ─────────────────────────────────────────────────────
+// ── Bulk Broadcast Modal (WhatsApp Style Recipient Selector) ───────────────
 function BroadcastModal({
   template,
   activeCount,
@@ -768,27 +781,112 @@ function BroadcastModal({
   activeCount: number;
   customers: any[];
   onClose: () => void;
-  onDispatched: (summary: { total: number; sent: number; failed: number; error?: string }) => void;
+  onDispatched: (summary: { total: number; sent: number; failed: number; error?: string; recipients?: any[] }) => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [headerImageUrl, setHeaderImageUrl] = useState(template.header_url || '');
   const [error, setError] = useState<string | null>(null);
 
-  const validRecipients = customers
-    .map((c) => {
-      const mob = c.whatsapp_e164 || c.mobile_number || c.mobile || c.phone || c.phone_raw || '';
-      return {
-        mobile: mob,
-        name: c.name || c.display_name || 'Customer',
-      };
-    })
-    .filter((r) => r.mobile && r.mobile.replace(/[^0-9]/g, '').length >= 8);
+  // Search, filter tabs & pagination limit
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterTab, setFilterTab] = useState<'all' | 'selected' | 'unselected'>('all');
+  const [displayCount, setDisplayCount] = useState(100);
+
+  // 1. Prepare valid recipients from all provided customer contacts
+  const validRecipients = useMemo(() => {
+    return customers
+      .map((c) => {
+        const mob = c.whatsapp_e164 || c.mobile_number || c.mobile || c.phone || c.phone_raw || '';
+        return {
+          id: c.id,
+          mobile: mob,
+          name: c.name || c.display_name || 'Customer',
+        };
+      })
+      .filter((r) => r.mobile && r.mobile.replace(/[^0-9]/g, '').length >= 8);
+  }, [customers]);
+
+  // 2. Selected IDs state (defaults to selecting all valid recipients)
+  const [selectedIds, setSelectedIds] = useState<Set<number | string>>(() => {
+    return new Set(validRecipients.map((r) => r.id));
+  });
+
+  // Keep in sync if customers load asynchronously after opening modal
+  useEffect(() => {
+    if (validRecipients.length > 0 && selectedIds.size === 0) {
+      setSelectedIds(new Set(validRecipients.map((r) => r.id)));
+    }
+  }, [validRecipients]);
+
+  // 3. Filtered recipients based on search query and active tab
+  const filteredRecipients = useMemo(() => {
+    let list = validRecipients;
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      const cleanQ = q.replace(/[^0-9]/g, '');
+      list = list.filter((r) => {
+        const nameMatch = r.name.toLowerCase().includes(q);
+        const phoneMatch = cleanQ
+          ? r.mobile.replace(/[^0-9]/g, '').includes(cleanQ)
+          : r.mobile.toLowerCase().includes(q);
+        return nameMatch || phoneMatch;
+      });
+    }
+
+    if (filterTab === 'selected') {
+      list = list.filter((r) => selectedIds.has(r.id));
+    } else if (filterTab === 'unselected') {
+      list = list.filter((r) => !selectedIds.has(r.id));
+    }
+
+    return list;
+  }, [validRecipients, searchQuery, filterTab, selectedIds]);
+
+  const toggleRecipient = (id: number | string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (searchQuery.trim() || filterTab !== 'all') {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const r of filteredRecipients) {
+          next.add(r.id);
+        }
+        return next;
+      });
+    } else {
+      setSelectedIds(new Set(validRecipients.map((r) => r.id)));
+    }
+  };
+
+  const deselectAll = () => {
+    if (searchQuery.trim() || filterTab !== 'all') {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const r of filteredRecipients) {
+          next.delete(r.id);
+        }
+        return next;
+      });
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const isApproved = (template.status || '').toUpperCase() === 'APPROVED';
 
   const handleStartBroadcast = async () => {
-    if (validRecipients.length === 0) {
-      alert(
-        'No valid customer phone numbers found. Please make sure customers in Customers Data have a valid mobile number with country code (e.g. +91 9876543210).'
-      );
+    if (selectedIds.size === 0) {
+      alert('Please select at least one recipient to broadcast to.');
       return;
     }
 
@@ -799,22 +897,31 @@ function BroadcastModal({
       const fd = new FormData();
       fd.append('name', `Broadcast - ${template.name}`);
       fd.append('template_id', String((template as any).id || 1));
-      const res = await api.campaigns.create(fd);
 
+      // Pass only the chosen recipient contact IDs
+      fd.append('contact_ids', JSON.stringify(Array.from(selectedIds)));
+
+      if (headerImageUrl && template.header_type === 'image') {
+        fd.append('header_image_url', headerImageUrl);
+      }
+
+      const res = await api.campaigns.create(fd);
       const summaryData = (res as any)?.data ?? res;
-      const sent = typeof summaryData?.sent === 'number' ? summaryData.sent : validRecipients.length;
+      const sent = typeof summaryData?.sent === 'number' ? summaryData.sent : selectedIds.size;
       const failed = typeof summaryData?.failed === 'number' ? summaryData.failed : 0;
-      const total = typeof summaryData?.total === 'number' ? summaryData.total : validRecipients.length;
+      const total = typeof summaryData?.total === 'number' ? summaryData.total : selectedIds.size;
       const details = summaryData?.details ?? [];
       const firstErr = details.find((d: any) => d.status === 'failed')?.error;
+
+      const selectedRecipients = validRecipients.filter((r) => selectedIds.has(r.id));
 
       onDispatched({
         total,
         sent,
         failed,
         error: firstErr,
-        recipients: validRecipients,
-      } as any);
+        recipients: selectedRecipients,
+      });
     } catch (err: any) {
       setError(err.message || 'Broadcast failed to dispatch');
     } finally {
@@ -822,100 +929,257 @@ function BroadcastModal({
     }
   };
 
+  const visibleList = filteredRecipients.slice(0, displayCount);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="card w-full max-w-md p-6 space-y-4 shadow-2xl">
-        <div className="flex items-center justify-between border-b pb-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="card w-full max-w-2xl p-6 space-y-4 shadow-2xl my-8 max-h-[92vh] flex flex-col">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between border-b pb-3 shrink-0">
           <div>
-            <h2 className="text-base font-bold text-gray-900">Broadcast WhatsApp Template</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-gray-900">Broadcast WhatsApp Template</h2>
+              {isApproved ? (
+                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Check size={10} /> APPROVED
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Clock size={10} /> PENDING
+                </span>
+              )}
+            </div>
             <p className="text-[11px] text-gray-500 font-mono">Template: {template.name}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X size={18} />
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
+            <X size={20} />
           </button>
         </div>
 
-        {template.status !== 'APPROVED' && (
-          <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 text-xs flex items-center gap-2">
+        {!isApproved && (
+          <div className="p-3 bg-amber-50 border border-amber-300 rounded-lg text-amber-900 text-xs flex items-center gap-2 shrink-0">
             <Clock size={16} className="shrink-0 text-amber-600" />
             <div>
-              <strong>Pending Meta Approval:</strong> Meta has not approved &ldquo;{template.name}&rdquo; yet. In WhatsApp Cloud API, sending is blocked until Meta changes status to APPROVED. You can use <strong>hello_world</strong> to test right now!
+              <strong>Pending Meta Approval:</strong> Meta has not approved &ldquo;{template.name}&rdquo; yet. In WhatsApp Cloud API, sending is blocked until Meta changes status to APPROVED.
             </div>
           </div>
         )}
 
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-xs flex items-center gap-2">
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-xs flex items-center gap-2 shrink-0">
             <AlertCircle size={16} className="shrink-0 text-red-500" />
             <span>{error}</span>
           </div>
         )}
 
-        <div className="space-y-3 text-xs">
-          <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl flex items-center justify-between">
-            <div className="flex items-center gap-2 text-emerald-950 font-bold">
+        {/* WhatsApp-style Audience Selector */}
+        <div className="space-y-3 flex-1 min-h-0 flex flex-col">
+          {/* Target Audience Summary & Quick Actions */}
+          <div className="bg-emerald-50/70 border border-emerald-200 p-3 rounded-xl flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-2 text-emerald-950 font-semibold text-xs">
               <Users size={16} className="text-emerald-700" />
               <span>Target Audience:</span>
-            </div>
-            <span className="font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full">
-              {validRecipients.length} Valid Numbers
-            </span>
-          </div>
-
-          {/* Valid Recipients Preview */}
-          <div className="bg-gray-50 border p-2.5 rounded-lg text-xs space-y-1">
-            <div className="font-bold text-gray-700 flex items-center justify-between">
-              <span>Recipients:</span>
-              <span className="text-[10px] text-gray-500 font-normal">
-                {validRecipients.length} verified
+              <span className="font-bold text-emerald-900 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full text-xs">
+                {selectedIds.size} of {validRecipients.length} Selected
               </span>
             </div>
-            {validRecipients.slice(0, 3).map((r, i) => (
-              <div key={i} className="text-gray-600 font-mono text-[11px] truncate">
-                • {r.mobile} ({r.name})
+
+            <div className="flex items-center gap-1.5 text-xs">
+              <button
+                type="button"
+                onClick={selectAll}
+                className="px-2.5 py-1 text-[11px] font-semibold text-emerald-800 bg-white border border-emerald-300 rounded-md hover:bg-emerald-50 transition-colors"
+              >
+                Select All
+              </button>
+              <button
+                type="button"
+                onClick={deselectAll}
+                className="px-2.5 py-1 text-[11px] font-semibold text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                Deselect All
+              </button>
+            </div>
+          </div>
+
+          {/* Search Bar & Filter Tabs */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                className="input text-xs pl-8 pr-7 py-2 w-full"
+                placeholder="Search by customer name or phone number..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setDisplayCount(100);
+                }}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1 bg-gray-100 p-0.5 rounded-lg border text-[11px] shrink-0">
+              <button
+                type="button"
+                onClick={() => setFilterTab('all')}
+                className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
+                  filterTab === 'all' ? 'bg-white text-gray-900 shadow-sm font-semibold' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                All ({validRecipients.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterTab('selected')}
+                className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
+                  filterTab === 'selected' ? 'bg-emerald-600 text-white shadow-sm font-semibold' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Selected ({selectedIds.size})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterTab('unselected')}
+                className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
+                  filterTab === 'unselected' ? 'bg-gray-700 text-white shadow-sm font-semibold' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Removed ({validRecipients.length - selectedIds.size})
+              </button>
+            </div>
+          </div>
+
+          {/* Interactive Scrollable Contact List (WhatsApp Style) */}
+          <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-inner flex-1 min-h-[160px] flex flex-col">
+            <div className="overflow-y-auto divide-y divide-gray-100 flex-1 max-h-56">
+              {visibleList.length === 0 ? (
+                <div className="p-8 text-center text-gray-500 text-xs">
+                  {searchQuery
+                    ? `No contacts found matching "${searchQuery}"`
+                    : filterTab === 'selected'
+                    ? 'No contacts currently selected'
+                    : filterTab === 'unselected'
+                    ? 'All contacts are currently selected'
+                    : 'No valid customer contacts found.'}
+                </div>
+              ) : (
+                visibleList.map((r) => {
+                  const isSelected = selectedIds.has(r.id);
+                  const initial = (r.name.trim()[0] || 'C').toUpperCase();
+                  return (
+                    <div
+                      key={r.id}
+                      onClick={() => toggleRecipient(r.id)}
+                      className={`flex items-center justify-between px-3.5 py-2 cursor-pointer transition-colors select-none ${
+                        isSelected ? 'bg-emerald-50/40 hover:bg-emerald-50/80' : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Checkbox */}
+                        <div
+                          className={`w-4 h-4 rounded flex items-center justify-center border transition-colors shrink-0 ${
+                            isSelected
+                              ? 'bg-emerald-600 border-emerald-600 text-white'
+                              : 'bg-white border-gray-300 text-transparent'
+                          }`}
+                        >
+                          <Check size={11} strokeWidth={3} />
+                        </div>
+
+                        {/* Circular Avatar */}
+                        <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-sm">
+                          {initial}
+                        </div>
+
+                        {/* Name and Mobile */}
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-gray-900 truncate">
+                            {r.name}
+                          </p>
+                          <p className="text-[11px] font-mono text-gray-500 truncate">
+                            {r.mobile}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Quick Action Button */}
+                      <div className="shrink-0 ml-2">
+                        {isSelected ? (
+                          <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <Check size={9} /> Added
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-medium text-gray-600 bg-gray-100 border border-gray-300 px-2 py-0.5 rounded-full hover:bg-gray-200">
+                            + Add
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {filteredRecipients.length > visibleList.length && (
+              <div className="p-2 bg-gray-50 border-t text-center text-xs text-gray-600 flex items-center justify-between px-4 shrink-0">
+                <span className="text-[11px]">
+                  Showing {visibleList.length} of {filteredRecipients.length} matching contacts
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDisplayCount((prev) => prev + 100)}
+                  className="font-semibold text-emerald-700 hover:text-emerald-800 text-xs"
+                >
+                  Load More (+100)
+                </button>
               </div>
-            ))}
-            {validRecipients.length === 0 && (
-              <p className="text-red-600 text-[11px]">
-                No customer with a valid mobile number found. Go to Customers Data and add/check customer mobile numbers.
-              </p>
             )}
           </div>
+        </div>
 
-          {template.header_type === 'image' && (
-            <div>
-              <label className="label">Custom Header Image URL (Optional)</label>
-              <input
-                type="url"
-                className="input text-xs font-mono"
-                placeholder="https://your-domain.com/banner.jpg"
-                value={headerImageUrl}
-                onChange={(e) => setHeaderImageUrl(e.target.value)}
-              />
-              <p className="text-[10px] text-gray-400 mt-0.5">
-                Paste any image link you wish to attach to this template broadcast.
-              </p>
-            </div>
-          )}
-
-          <div className="space-y-1 bg-gray-50 p-3 rounded-lg border text-gray-600 text-[11px]">
-            <div>• Each customer receives an individual message using Meta Cloud API.</div>
-            <div>• Variables like &#123;&#123;1&#125;&#125; are automatically replaced with each customer's name.</div>
-            <div>• Dispatches with safe pacing to respect Meta rate limits.</div>
+        {template.header_type === 'image' && (
+          <div className="shrink-0">
+            <label className="label">Custom Header Image URL (Optional)</label>
+            <input
+              type="url"
+              className="input text-xs font-mono"
+              placeholder="https://your-domain.com/banner.jpg"
+              value={headerImageUrl}
+              onChange={(e) => setHeaderImageUrl(e.target.value)}
+            />
+            <p className="text-[10px] text-gray-400 mt-0.5">
+              Paste any public image link you wish to attach to this template broadcast.
+            </p>
           </div>
+        )}
 
-          <div className="pt-2 flex justify-end gap-2 border-t">
-            <button type="button" onClick={onClose} className="btn-secondary text-xs">
-              Cancel
-            </button>
-            <button
-              onClick={handleStartBroadcast}
-              disabled={loading || activeCount === 0}
-              className="btn-primary text-xs flex items-center gap-1.5"
-            >
-              {loading ? 'Broadcasting...' : `Send to ${activeCount} Customers`}
-            </button>
-          </div>
+        <div className="space-y-1 bg-gray-50 p-2.5 rounded-lg border text-gray-600 text-[11px] shrink-0">
+          <div>• Each customer receives an individual WhatsApp message using Meta Cloud API.</div>
+          <div>• Variables like &#123;&#123;1&#125;&#125; are automatically personalized with each customer's name.</div>
+          <div>• Safe dispatch queue with rate limiting to protect your Meta phone number quality score.</div>
+        </div>
+
+        {/* Modal Footer Actions */}
+        <div className="pt-2 flex justify-end gap-2 border-t shrink-0">
+          <button type="button" onClick={onClose} className="btn-secondary text-xs">
+            Cancel
+          </button>
+          <button
+            onClick={handleStartBroadcast}
+            disabled={loading || selectedIds.size === 0 || !isApproved}
+            className="btn-primary text-xs flex items-center gap-1.5"
+          >
+            {loading ? 'Broadcasting...' : `Send to ${selectedIds.size} Selected Customers`}
+          </button>
         </div>
       </div>
     </div>

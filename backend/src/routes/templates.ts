@@ -46,7 +46,7 @@ export async function syncTemplatesForOrg(orgId: string): Promise<{ synced: numb
 
       await client.query(`
         UPDATE templates
-        SET status = 'deleted', updated_at = NOW()
+        SET status = 'disabled', updated_at = NOW()
         WHERE org_id = $1
           AND CONCAT(name, ':::', language) != ALL($2::text[])
       `, [orgId, metaKeys]);
@@ -59,7 +59,7 @@ export async function syncTemplatesForOrg(orgId: string): Promise<{ synced: numb
 
       await client.query(`
         UPDATE templates
-        SET status = 'deleted', updated_at = NOW()
+        SET status = 'disabled', updated_at = NOW()
         WHERE org_id = $1
       `, [orgId]);
     }
@@ -163,15 +163,25 @@ router.post('/sync', async (req: Request, res: Response) => {
 // ── GET /api/templates ──────────────────────────────────────────────────────
 router.get('/', async (req: Request, res: Response) => {
   const orgId = getOrgId(req);
+
+  // Auto-sync live template status from Meta unless explicitly skipped
+  if (req.query.no_sync !== 'true') {
+    try {
+      await syncTemplatesForOrg(orgId);
+    } catch (syncErr: any) {
+      logger.warn({ err: syncErr.message }, 'Auto-syncing templates from Meta in GET /api/templates failed; serving cached templates');
+    }
+  }
+
   let client;
   try {
     client = await pool.connect();
     const { rows } = await client.query(
       `SELECT id, org_id, name, language, category, header_type, header_format,
-              body, variable_names, footer, meta_template_id, status,
+              body, variable_names, footer, meta_template_id, UPPER(status) as status,
               rejection_reason, components, created_at, updated_at
        FROM templates
-       WHERE org_id = $1 AND status != 'deleted'
+       WHERE org_id = $1 AND status != 'disabled'
        ORDER BY name ASC, language ASC`,
       [orgId]
     );
