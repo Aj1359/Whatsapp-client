@@ -126,6 +126,8 @@ export async function processSendingBatch(): Promise<number> {
 
       // 1. Header Media (supports Image, Video, Document)
       if (msg.media_id) {
+        const isUrl = typeof msg.media_id === 'string' && (msg.media_id.startsWith('http://') || msg.media_id.startsWith('https://'));
+        const mediaParam = isUrl ? { link: msg.media_id } : { id: msg.media_id };
         const hType = (msg.header_type || msg.header_format || 'image').toLowerCase();
         if (hType === 'video') {
           components.push({
@@ -133,7 +135,7 @@ export async function processSendingBatch(): Promise<number> {
             parameters: [
               {
                 type: 'video',
-                video: { id: msg.media_id },
+                video: mediaParam,
               },
             ],
           });
@@ -143,7 +145,7 @@ export async function processSendingBatch(): Promise<number> {
             parameters: [
               {
                 type: 'document',
-                document: { id: msg.media_id, filename: 'document.pdf' },
+                document: isUrl ? { link: msg.media_id, filename: 'document.pdf' } : { id: msg.media_id, filename: 'document.pdf' },
               },
             ],
           });
@@ -153,7 +155,7 @@ export async function processSendingBatch(): Promise<number> {
             parameters: [
               {
                 type: 'image',
-                image: { id: msg.media_id },
+                image: mediaParam,
               },
             ],
           });

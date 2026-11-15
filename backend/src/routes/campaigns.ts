@@ -185,6 +185,7 @@ router.post('/', upload.any(), async (req: Request, res: Response) => {
     contact_ids: contactIdsJson,
     variables: variablesJson,
     scheduled_at,
+    header_image_url,
   } = req.body;
 
   if (!name || !template_id) {
@@ -271,6 +272,14 @@ router.post('/', upload.any(), async (req: Request, res: Response) => {
         return res.status(400).json({
           error: { code: 'MEDIA_UPLOAD_FAILED', message: `Failed to upload header media to Meta: ${mediaErr.message}` },
         });
+      }
+    } else if (header_image_url && typeof header_image_url === 'string' && header_image_url.trim()) {
+      mediaId = header_image_url.trim();
+    } else if (template.header_type === 'image') {
+      const headerComp = (template.components || []).find((c: any) => c.type === 'HEADER');
+      const handle = headerComp?.example?.header_handle?.[0];
+      if (handle) {
+        mediaId = handle;
       }
     }
 
